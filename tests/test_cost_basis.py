@@ -1,4 +1,4 @@
-﻿"""Tests for cost basis reconstruction."""
+"""Tests for cost basis reconstruction."""
 
 from cqd.engine.cost_basis import reconstruct_cost_basis
 

@@ -119,9 +119,7 @@ class KrakenClient:
             env=env,
         )
         try:
-            stdout, stderr = await asyncio.wait_for(
-                proc.communicate(), timeout=self._timeout
-            )
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=self._timeout)
         except asyncio.TimeoutError:
             with contextlib.suppress(ProcessLookupError):
                 proc.kill()
@@ -148,9 +146,7 @@ class KrakenClient:
 
         if proc.returncode != 0:
             detail = stderr.decode("utf-8", "replace").strip() if stderr else ""
-            raise KrakenCLIError(
-                f"kraken exited {proc.returncode}: {detail or 'no stderr'}"
-            )
+            raise KrakenCLIError(f"kraken exited {proc.returncode}: {detail or 'no stderr'}")
 
         # Exit 0 must still produce a JSON body; truncated or empty stdout is a
         # protocol failure, never data (None used to normalize to "no trades").

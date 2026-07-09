@@ -21,10 +21,14 @@ from cqd.data.rest import KrakenRESTClient, NonceCounter, sign_request
 
 # Kraken's documented signature test vector
 # (https://docs.kraken.com/api/docs/guides/spot-rest-auth).
-_DOC_SECRET = "kQH5HW/8p1uGOVjbgWA7FunAmGO8lsSUXNsu3eow76sz84Q18fWxnyRzBHCd3pd5nE9qa99HAZtuZuj6F1huXg=="
+_DOC_SECRET = (
+    "kQH5HW/8p1uGOVjbgWA7FunAmGO8lsSUXNsu3eow76sz84Q18fWxnyRzBHCd3pd5nE9qa99HAZtuZuj6F1huXg=="
+)
 _DOC_POST = "nonce=1616492376594&ordertype=limit&pair=XBTUSD&price=37500&type=buy&volume=1.25"
 _DOC_PATH = "/0/private/AddOrder"
-_DOC_SIGN = "4/dpxb3iT4tp/ZCVEwSnEsLxx0bqyhLpdfOpc6fn7OR8+UClSV5n9E6aSS8MPtnRfp32bAb0nmbRn6H8ndwLUQ=="
+_DOC_SIGN = (
+    "4/dpxb3iT4tp/ZCVEwSnEsLxx0bqyhLpdfOpc6fn7OR8+UClSV5n9E6aSS8MPtnRfp32bAb0nmbRn6H8ndwLUQ=="
+)
 
 TICKER_RESULT = {"XXBTZUSD": {"c": ["70860.00000", "0.00000138"]}}
 

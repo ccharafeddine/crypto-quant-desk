@@ -1,4 +1,4 @@
-﻿"""Tests for the ported risk/metrics engine.
+"""Tests for the ported risk/metrics engine.
 
 Shapes mirror the Portfolio Analyzer's TestRisk / TestConcentration, plus
 crypto-specific checks (365 annualization, BTC beta recovery, orchestrator).
@@ -64,11 +64,13 @@ class TestConcentration:
 class TestRiskContribution:
     def test_sums_to_100(self):
         w = np.array([0.4, 0.3, 0.3])
-        cov = np.array([
-            [0.04, 0.01, 0.005],
-            [0.01, 0.06, 0.01],
-            [0.005, 0.01, 0.03],
-        ])
+        cov = np.array(
+            [
+                [0.04, 0.01, 0.005],
+                [0.01, 0.06, 0.01],
+                [0.005, 0.01, 0.03],
+            ]
+        )
         rc = R.risk_contribution_pct(w, cov)
         assert rc.sum() == pytest.approx(100.0, abs=0.1)
 
@@ -101,11 +103,14 @@ class TestOrchestrator:
         rng = np.random.default_rng(1)
         dates = pd.date_range("2025-01-01", periods=300, freq="D")
         btc = rng.normal(0.0, 0.03, 300)
-        df = pd.DataFrame({
-            "BTC": btc,
-            "ADA": 1.3 * btc + rng.normal(0, 0.02, 300),
-            "PEPE": 1.6 * btc + rng.normal(0, 0.03, 300),
-        }, index=dates)
+        df = pd.DataFrame(
+            {
+                "BTC": btc,
+                "ADA": 1.3 * btc + rng.normal(0, 0.02, 300),
+                "PEPE": 1.6 * btc + rng.normal(0, 0.03, 300),
+            },
+            index=dates,
+        )
         weights = pd.Series({"ADA": 0.6, "PEPE": 0.4})
 
         pr = R.compute_portfolio_risk(weights, df, btc_col="BTC")

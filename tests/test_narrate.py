@@ -1,4 +1,4 @@
-﻿"""Tests for the pure rules-based narrator (offline, no Qt/network/engine)."""
+"""Tests for the pure rules-based narrator (offline, no Qt/network/engine)."""
 
 import subprocess
 import sys
@@ -34,9 +34,7 @@ def _ar(
     if per_asset_beta is None:
         per_asset_beta = pd.Series({a: book_beta for a in w.index}, dtype=float)
     if risk_contribution is None:
-        risk_contribution = pd.Series(
-            {a: float(v) * 100 for a, v in w.items()}, dtype=float
-        )
+        risk_contribution = pd.Series({a: float(v) * 100 for a, v in w.items()}, dtype=float)
     risk = PortfolioRisk(
         weights=w,
         ann_vol=ann_vol,

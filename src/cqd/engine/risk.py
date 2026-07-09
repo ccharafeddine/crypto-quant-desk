@@ -31,7 +31,7 @@ from cqd.engine import metrics as M
 def herfindahl_index(weights: np.ndarray | pd.Series) -> float:
     """HHI: sum of squared weights. 1/N (diversified) → 1.0 (single asset)."""
     w = weights.values if isinstance(weights, pd.Series) else np.asarray(weights)
-    return float(np.sum(w ** 2))
+    return float(np.sum(w**2))
 
 
 def effective_n_bets(weights: np.ndarray | pd.Series) -> float:
@@ -99,9 +99,7 @@ def beta_to_btc(asset_returns: pd.Series, btc_returns: pd.Series) -> float:
     beta = cov(asset, btc) / var(btc).
     Same math as the equity CAPM beta; the market leg is BTC.
     """
-    aligned = pd.concat(
-        [asset_returns.rename("a"), btc_returns.rename("b")], axis=1
-    ).dropna()
+    aligned = pd.concat([asset_returns.rename("a"), btc_returns.rename("b")], axis=1).dropna()
     if len(aligned) < 3:
         return np.nan
     var_b = float(aligned["b"].var())
@@ -116,9 +114,7 @@ def rolling_beta_to_btc(
     window: int = 30,
 ) -> pd.Series:
     """Rolling BTC beta (default 30-day window for a crypto desk)."""
-    aligned = pd.concat(
-        [asset_returns.rename("a"), btc_returns.rename("b")], axis=1
-    ).dropna()
+    aligned = pd.concat([asset_returns.rename("a"), btc_returns.rename("b")], axis=1).dropna()
     cov_r = aligned["a"].rolling(window).cov(aligned["b"])
     var_r = aligned["b"].rolling(window).var()
     beta = cov_r / var_r
@@ -145,7 +141,9 @@ def portfolio_beta(weights: pd.Series, betas: pd.Series) -> float:
 # ──────────────────────────────────────────────────────────────
 
 
-def tail_metrics(returns: pd.Series, periods_per_year: int = M.PERIODS_PER_YEAR) -> dict[str, float]:
+def tail_metrics(
+    returns: pd.Series, periods_per_year: int = M.PERIODS_PER_YEAR
+) -> dict[str, float]:
     """Comprehensive tail risk metrics for a return series."""
     r = returns.dropna()
     if r.empty:
@@ -254,9 +252,7 @@ def compute_portfolio_risk(
     # Per-asset BTC beta
     if btc_col in returns.columns:
         btc_r = returns[btc_col]
-        per_beta = pd.Series(
-            {a: beta_to_btc(returns[a], btc_r) for a in assets}, name="beta_btc"
-        )
+        per_beta = pd.Series({a: beta_to_btc(returns[a], btc_r) for a in assets}, name="beta_btc")
     else:
         per_beta = pd.Series({a: np.nan for a in assets}, name="beta_btc")
 

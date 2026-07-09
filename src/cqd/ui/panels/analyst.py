@@ -89,10 +89,7 @@ class AnalystPanel(Panel):
                 self.status.setText(f"Error: {e}")
 
     def _render(self, narration) -> None:
-        html = "".join(
-            f"<p><b>{title}</b><br>{body}</p>"
-            for title, body in narration.sections
-        )
+        html = "".join(f"<p><b>{title}</b><br>{body}</p>" for title, body in narration.sections)
         self.transcript.setHtml(html)
         self.disclaimer.setText(narration.disclaimer)
 

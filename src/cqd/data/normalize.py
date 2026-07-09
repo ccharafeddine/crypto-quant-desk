@@ -81,7 +81,9 @@ _PAIR_QUOTE_SUFFIXES: tuple[str, ...] = tuple(
 # quote: XTZUSD is XTZ+USD, not XT+ZUSD; REZUSD is REZ+USD. split_pair therefore
 # accepts a classic-suffix match only when the leftover base also looks classic,
 # and otherwise keeps scanning down to the bare quote.
-_CLASSIC_QUOTE_SUFFIXES: frozenset[str] = frozenset({"ZUSD", "ZEUR", "ZGBP", "ZJPY", "XXBT", "XETH"})
+_CLASSIC_QUOTE_SUFFIXES: frozenset[str] = frozenset(
+    {"ZUSD", "ZEUR", "ZGBP", "ZJPY", "XXBT", "XETH"}
+)
 
 
 def _is_classic_base(base: str) -> bool:

@@ -55,9 +55,7 @@ def sign_request(api_secret_b64: str, uri_path: str, nonce: str, post_data: str)
     signature test vector in their docs.
     """
     sha = hashlib.sha256((nonce + post_data).encode()).digest()
-    mac = hmac.new(
-        base64.b64decode(api_secret_b64), uri_path.encode() + sha, hashlib.sha512
-    )
+    mac = hmac.new(base64.b64decode(api_secret_b64), uri_path.encode() + sha, hashlib.sha512)
     return base64.b64encode(mac.digest()).decode()
 
 
@@ -180,9 +178,7 @@ class KrakenRESTClient:
         self, method: str, path: str, *, params=None, data=None, headers=None
     ) -> Any:
         try:
-            resp = await self._http.request(
-                method, path, params=params, data=data, headers=headers
-            )
+            resp = await self._http.request(method, path, params=params, data=data, headers=headers)
         except httpx.TimeoutException:
             raise KrakenTimeoutError(f"Kraken REST '{path}' timed out") from None
         except httpx.TransportError as e:
@@ -206,13 +202,9 @@ class KrakenRESTClient:
     async def _public(self, endpoint: str, params: dict | None = None) -> Any:
         return await self._request("GET", f"/0/public/{endpoint}", params=params)
 
-    async def _private(
-        self, endpoint: str, data: dict | None = None, *, cost: float = 1.0
-    ) -> Any:
+    async def _private(self, endpoint: str, data: dict | None = None, *, cost: float = 1.0) -> Any:
         if not (self._api_key and self._api_secret):
-            raise KrakenAuthError(
-                "No Kraken API keys configured. Add them in File > Settings."
-            )
+            raise KrakenAuthError("No Kraken API keys configured. Add them in File > Settings.")
         await self._limiter.acquire(cost)
         if self._nonce is None:
             self._nonce = _get_shared_nonce()
@@ -265,7 +257,9 @@ class KrakenRESTClient:
         raw = await self._public("OHLC", params)
         return normalize_ohlc(raw)
 
-    async def get_depth(self, pair: str, *, count: int = 25) -> dict[str, list[tuple[float, float]]]:
+    async def get_depth(
+        self, pair: str, *, count: int = 25
+    ) -> dict[str, list[tuple[float, float]]]:
         raw = await self._public("Depth", {"pair": pair, "count": count})
         return normalize_depth(raw)
 

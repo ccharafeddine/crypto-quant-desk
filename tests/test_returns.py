@@ -42,9 +42,7 @@ def test_outer_join_ffill_no_spurious_returns() -> None:
 
 
 def test_last_days_trimming() -> None:
-    closes = {
-        "BTC": [(D1, 100.0), (D2, 101.0), (D3, 102.0), (D4, 103.0), (D5, 104.0)]
-    }
+    closes = {"BTC": [(D1, 100.0), (D2, 101.0), (D3, 102.0), (D4, 103.0), (D5, 104.0)]}
     r = closes_to_returns(closes, days=3)
     # Trim prices to last 3 rows (D3,D4,D5) -> 2 return rows (D4,D5).
     assert len(r) == 2

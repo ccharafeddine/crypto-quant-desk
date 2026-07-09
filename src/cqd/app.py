@@ -20,9 +20,7 @@ log = logging.getLogger("cqd")
 def _setup_logging() -> None:
     """File log + crash hooks: a GUI app (esp. pythonw) must never die silently."""
     handler = logging.FileHandler(app_data_dir() / "app.log", encoding="utf-8")
-    handler.setFormatter(
-        logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
-    )
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
     root = logging.getLogger()
     root.addHandler(handler)
     root.setLevel(logging.INFO)

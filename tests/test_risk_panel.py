@@ -9,8 +9,10 @@ from cqd.ui.panels.risk import build_risk_view
 
 def _stub_ar(*, unpriced=None, dust=None, beta_override=None) -> AccountRisk:
     weights = pd.Series({"BTC": 0.5, "ETH": 0.3, "USD": 0.2})
-    beta = beta_override if beta_override is not None else pd.Series(
-        {"BTC": 1.0, "ETH": 1.2, "USD": 0.0}
+    beta = (
+        beta_override
+        if beta_override is not None
+        else pd.Series({"BTC": 1.0, "ETH": 1.2, "USD": 0.0})
     )
     rc = pd.Series({"BTC": 60.0, "ETH": 40.0, "USD": 0.0})
     risk = PortfolioRisk(
@@ -63,9 +65,7 @@ def test_demo_badge_flag() -> None:
 
 
 def test_caveats_unpriced_and_dust() -> None:
-    view = build_risk_view(
-        _stub_ar(unpriced=["WEIRD"], dust={"SHIB": 0.5}), is_demo=False
-    )
+    view = build_risk_view(_stub_ar(unpriced=["WEIRD"], dust={"SHIB": 0.5}), is_demo=False)
     joined = " | ".join(view.caveats)
     assert "Excluded (no price): WEIRD" in joined
     assert "Excluded (dust < $1): SHIB" in joined

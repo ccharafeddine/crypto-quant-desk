@@ -56,9 +56,7 @@ def _accumulate(asset: str, quote: str, legs: list[dict]) -> CostBasisResult:
     oversold = False
 
     # Stable order: timestamp when present, original position otherwise/ties.
-    ordered = sorted(
-        enumerate(legs), key=lambda it: (float(it[1].get("timestamp") or 0.0), it[0])
-    )
+    ordered = sorted(enumerate(legs), key=lambda it: (float(it[1].get("timestamp") or 0.0), it[0]))
     for _, t in ordered:
         amount = float(t["amount"])
         cost = float(t["cost"])
@@ -127,7 +125,5 @@ def reconstruct_cost_basis(
         return by_quote.get(quote, _zero(asset, quote))
     if not by_quote:
         return _zero(asset, "USD")
-    ranked = sorted(
-        by_quote.items(), key=lambda kv: (-kv[1].quantity, -kv[1].total_cost, kv[0])
-    )
+    ranked = sorted(by_quote.items(), key=lambda kv: (-kv[1].quantity, -kv[1].total_cost, kv[0]))
     return ranked[0][1]

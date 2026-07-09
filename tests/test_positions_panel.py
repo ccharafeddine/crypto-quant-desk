@@ -1,4 +1,4 @@
-﻿"""Tests for the Positions panel's pure cost-basis formatting (no QApplication)."""
+"""Tests for the Positions panel's pure cost-basis formatting (no QApplication)."""
 
 from cqd.engine.cost_basis import CostBasisResult, reconstruct_cost_basis
 from cqd.ui.panels.positions import format_cost_basis

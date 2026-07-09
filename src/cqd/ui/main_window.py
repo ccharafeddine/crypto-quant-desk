@@ -79,14 +79,10 @@ class MainWindow(QMainWindow):
         self.chart_panel = ChartPanel(self)
         self.analyst_panel = AnalystPanel(self)
 
-        self._add_dock(
-            self.positions_panel, "Positions", Qt.DockWidgetArea.LeftDockWidgetArea
-        )
+        self._add_dock(self.positions_panel, "Positions", Qt.DockWidgetArea.LeftDockWidgetArea)
         self._add_dock(self.risk_panel, "Risk", Qt.DockWidgetArea.RightDockWidgetArea)
         self._add_dock(self.chart_panel, "Chart", Qt.DockWidgetArea.RightDockWidgetArea)
-        self._add_dock(
-            self.analyst_panel, "Analyst", Qt.DockWidgetArea.BottomDockWidgetArea
-        )
+        self._add_dock(self.analyst_panel, "Analyst", Qt.DockWidgetArea.BottomDockWidgetArea)
 
     def _add_dock(self, widget, title: str, area: Qt.DockWidgetArea) -> QDockWidget:
         dock = QDockWidget(title, self)

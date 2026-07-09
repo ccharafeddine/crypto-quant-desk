@@ -30,10 +30,7 @@ _VOL_GAP = 0.10  # EWMA more than 10% above/below annualized -> regime note
 _ZERO_EPS = 1e-9  # treat |beta|,|risk| below this as zero (cash-like)
 _RISK_DISPROPORTION = 1.25  # risk share this many x weight -> "punches above weight"
 
-DISCLAIMER = (
-    "Descriptive analytics generated from your computed metrics. "
-    "Not financial advice."
-)
+DISCLAIMER = "Descriptive analytics generated from your computed metrics. Not financial advice."
 
 
 @dataclass
@@ -96,23 +93,16 @@ def narrate_account_risk(ar: AccountRisk) -> Narration:
             beta_label = "is dampened relative to BTC"
         else:
             beta_label = "moves roughly with BTC"
-        body = (
-            f"Book beta to BTC is {r.book_beta_btc:.2f}; the portfolio {beta_label}."
-        )
+        body = f"Book beta to BTC is {r.book_beta_btc:.2f}; the portfolio {beta_label}."
         betas = r.per_asset_beta.dropna()
         if len(betas) > 0:
             hi = betas.idxmax()
-            body += (
-                f" The most BTC-sensitive holding is {hi} "
-                f"(beta {float(betas.loc[hi]):.2f})."
-            )
+            body += f" The most BTC-sensitive holding is {hi} (beta {float(betas.loc[hi]):.2f})."
         sections.append(("Market sensitivity", body))
 
     # --- Volatility ---
     if _is_nan(r.ann_vol) or _is_nan(r.ewma_vol):
-        sections.append(
-            ("Volatility", "Volatility is unavailable (insufficient return history).")
-        )
+        sections.append(("Volatility", "Volatility is unavailable (insufficient return history)."))
     else:
         if r.ewma_vol > r.ann_vol * (1 + _VOL_GAP):
             gap = "recent volatility is running hotter than the full-window average"
@@ -137,9 +127,7 @@ def narrate_account_risk(ar: AccountRisk) -> Narration:
     if rc is not None and len(rc) > 0:
         top_asset = rc.idxmax()
         top_rc = float(rc.loc[top_asset])
-        body = (
-            f"{top_asset} drives the most risk, about {top_rc:.0f}% of the total."
-        )
+        body = f"{top_asset} drives the most risk, about {top_rc:.0f}% of the total."
         # Flag any holding whose risk share punches above its weight.
         flagged = []
         for asset, share in rc.sort_values(ascending=False).items():
@@ -148,9 +136,7 @@ def narrate_account_risk(ar: AccountRisk) -> Narration:
                 flagged.append((str(asset), wp, float(share)))
         if flagged:
             a, wp, sh = flagged[0]
-            body += (
-                f" {a} is {wp:.0f}% of the book but drives {sh:.0f}% of the risk."
-            )
+            body += f" {a} is {wp:.0f}% of the book but drives {sh:.0f}% of the risk."
         sections.append(("Risk drivers", body))
 
     # --- Cash buffer (zero-risk, zero-beta holdings) ---
@@ -181,9 +167,7 @@ def narrate_account_risk(ar: AccountRisk) -> Narration:
         caveat_bits.append(f"no price available for {', '.join(map(str, unpriced))}")
     if dust:
         min_usd = ar.info.get("min_usd", 1.0)
-        caveat_bits.append(
-            f"below the ${min_usd:g} dust threshold: {', '.join(map(str, dust))}"
-        )
+        caveat_bits.append(f"below the ${min_usd:g} dust threshold: {', '.join(map(str, dust))}")
     if caveat_bits:
         sections.append(
             (

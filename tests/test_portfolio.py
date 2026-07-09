@@ -144,9 +144,7 @@ def test_empty_portfolio_raises() -> None:
 
 
 def test_all_dust_account_raises() -> None:
-    client = _StubClient(
-        balances={"SHIB": 1.0}, marks={"SHIB/USD": 0.1}, ohlc={"SHIB": _ramp(0.1)}
-    )
+    client = _StubClient(balances={"SHIB": 1.0}, marks={"SHIB/USD": 0.1}, ohlc={"SHIB": _ramp(0.1)})
     with pytest.raises(EmptyPortfolioError):
         asyncio.run(compute_account_risk(client, min_usd=1.0))
 

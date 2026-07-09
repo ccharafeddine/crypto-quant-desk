@@ -109,9 +109,7 @@ class SettingsDialog(QDialog):
 
         self.anthropic_key = QLineEdit()
         self.anthropic_key.setEchoMode(QLineEdit.EchoMode.Password)
-        self.anthropic_key.setPlaceholderText(
-            "Anthropic API key (optional, for the AI analyst)"
-        )
+        self.anthropic_key.setPlaceholderText("Anthropic API key (optional, for the AI analyst)")
         self.anthropic_btn = QPushButton("Save")
         self.anthropic_btn.clicked.connect(self._on_anthropic_save)
         anthropic_row = QHBoxLayout()
@@ -155,8 +153,7 @@ class SettingsDialog(QDialog):
                 balance = await client.get_balance()
         except KrakenAuthError:
             self._set_status(
-                "Kraken rejected the key pair (invalid key, secret, or nonce). "
-                "Keys were NOT saved."
+                "Kraken rejected the key pair (invalid key, secret, or nonce). Keys were NOT saved."
             )
             return
         except KrakenError as e:

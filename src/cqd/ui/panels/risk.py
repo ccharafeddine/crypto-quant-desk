@@ -95,16 +95,12 @@ def build_risk_view(ar: AccountRisk, *, is_demo: bool) -> RiskView:
         caveats.append("Excluded (no price): " + ", ".join(map(str, unpriced)))
     if dust:
         min_usd = ar.info.get("min_usd", 1.0)
-        caveats.append(
-            f"Excluded (dust < ${min_usd:g}): " + ", ".join(map(str, dust))
-        )
+        caveats.append(f"Excluded (dust < ${min_usd:g}): " + ", ".join(map(str, dust)))
     dropped = ar.info.get("returns_dropped") or []
     excluded = list(r.excluded_assets)
     no_history = list(dict.fromkeys([*dropped, *excluded]))
     if no_history:
-        caveats.append(
-            "Excluded from risk (no return history): " + ", ".join(map(str, no_history))
-        )
+        caveats.append("Excluded from risk (no return history): " + ", ".join(map(str, no_history)))
     if r.frame_days and r.window_days < r.frame_days:
         caveats.append(
             f"Risk window shortened to {r.window_days} of {r.frame_days} days "
@@ -151,9 +147,7 @@ class RiskPanel(Panel):
         self.table = QTableWidget(0, len(self.HEADERS))
         self.table.setHorizontalHeaderLabels(self.HEADERS)
         self.table.verticalHeader().hide()
-        self.table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.ResizeMode.Stretch
-        )
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table.setShowGrid(False)
@@ -162,9 +156,7 @@ class RiskPanel(Panel):
         # several rows and let it absorb the panel's vertical space (scrolling
         # when rows overflow), while the surrounding labels stay natural height.
         self.table.setMinimumHeight(220)
-        self.table.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
-        )
+        self.table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self._layout.addWidget(self.table, 1)
 
         self.caveats_label = QLabel("")

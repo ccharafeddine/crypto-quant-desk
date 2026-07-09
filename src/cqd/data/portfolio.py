@@ -84,9 +84,7 @@ def compute_weights(
     if total_usd <= 0:
         weights = pd.Series(dtype=float)
     else:
-        weights = pd.Series(
-            {a: v / total_usd for a, v in values.items()}, dtype=float
-        )
+        weights = pd.Series({a: v / total_usd for a, v in values.items()}, dtype=float)
 
     info: dict[str, Any] = {
         "total_usd": total_usd,
@@ -98,9 +96,7 @@ def compute_weights(
     return weights, info
 
 
-async def compute_account_risk(
-    client: Any, *, days: int = 90, min_usd: float = 1.0
-) -> AccountRisk:
+async def compute_account_risk(client: Any, *, days: int = 90, min_usd: float = 1.0) -> AccountRisk:
     """Fetch the account, build weights + returns, and run the risk engine.
 
     Raises EmptyPortfolioError if nothing priceable above `min_usd` remains.
@@ -121,8 +117,7 @@ async def compute_account_risk(
     weights, info = compute_weights(balances, marks, min_usd=min_usd)
     if weights.empty:
         raise EmptyPortfolioError(
-            "No priceable holdings above the dust threshold "
-            f"(min_usd={min_usd}); info={info}"
+            f"No priceable holdings above the dust threshold (min_usd={min_usd}); info={info}"
         )
 
     returns = await build_returns_frame(client, list(weights.index), days=days)
