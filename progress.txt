@@ -1,7 +1,9 @@
 # progress.txt — crypto-quant-desk v2 overhaul
 
-Status: Phase 3 — 3.1-3.7 built and tested; 3.8 live-fire gate awaits owner.
-Next: owner runs the gated live-fire test (below), then Phase 4 (WebSocket).
+Status: Phase 3 — COMPLETE. 3.8 live-fire gate PASSED 2026-07-09 (owner placed
+a $7 live limit sell, saw the ack in Open Orders, cancelled it; full audit
+trail: submit 09:01:18Z -> ack 09:01:19Z -> cancel 09:05:37Z).
+Next: Phase 4 (WebSocket streaming) per docs/IMPLEMENTATION_PLAN.md.
 Last session: 2026-07-09
 
 ## Done
@@ -60,14 +62,16 @@ Last session: 2026-07-09
   paper-off AND non-demo) · ticket panel + order-confirm dialog + orders panel
   + Trading menu (typed-LIVE gate) + Positions "Close" pre-fill.
 
+- 2026-07-09: 3.8 gate passed. Post-gate fixes: paper overlay now seeded from
+  the account snapshot on first paper submit (audit log exposed that every
+  paper order rejected as unaffordable - the gate's dry run caught it);
+  compact QSS for buttons inside table rows (cancel button was clipped).
+
 ## Next
-- 3.8 owner live-fire gate: add Create & Modify Orders permission to the
-  Kraken key; set max order value to $10 in Settings > Trading; Trading >
-  uncheck Paper mode (type LIVE); place a limit buy far below market (e.g.
-  0.0001 BTC @ half the current price); see ack in Open Orders + audit log
-  (%LOCALAPPDATA%\CryptoQuantDesk\audit\); cancel it from the panel.
-- Phase 4 (WebSocket streaming): ws.py public ticker + heartbeat/backoff ->
-  live marks in panels -> private executions stream -> PnL tick flash.
+- Phase 4 (WebSocket streaming): 4.1 data/ws.py public ticker + heartbeat
+  watchdog + backoff reconnect (tested vs fake server) -> 4.2 live marks in
+  Positions/ticket + DELAYED badge + REST fallback -> 4.3 private executions
+  stream driving the Orders panel + resync on reconnect -> 4.4 PnL tick flash.
 
 ## Environment notes
 - Windows box: repo at C:\Users\mnc-9\crypto-quant-desk, venv at .venv (installed,

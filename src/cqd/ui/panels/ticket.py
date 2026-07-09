@@ -293,6 +293,11 @@ class TicketPanel(Panel):
 
     async def _submit(self, token: str) -> None:
         try:
+            if services.trading_mode() == "paper":
+                try:
+                    await services.ensure_paper_seeded()
+                except KrakenError:
+                    pass  # unseeded broker rejects cleanly; no crash
             result = await services.order_service().submit(token)
         except Exception as e:  # noqa: BLE001 - surface, never crash the app
             self.status.setText(f"Submit failed: {e}")

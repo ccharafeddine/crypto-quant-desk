@@ -32,3 +32,14 @@ One entry per correction or debugging session. Format: date, what went wrong, th
 - One state file, many writers: each panel's client got its own NonceCounter
   over the same file, risking duplicate nonces under concurrency. Rule: state
   with a uniqueness invariant gets exactly one process-wide owner.
+
+## 2026-07-09 — Phase 3 live-fire gate
+
+- The audit log caught a bug nobody reported: the owner's paper dry-run was
+  silently rejected (unseeded overlay) and only the JSONL trail showed it.
+  Rule: after any end-to-end test, read the audit/app logs even when the user
+  says it worked - the failures they route around are still failures.
+- A widget can pass every test and still be unusable: the cancel button was
+  clipped illegible by default padding inside a table row. Rule: components
+  embedded in nonstandard containers (table cells, headers) need their own
+  compact style variant, checked visually at real row heights.

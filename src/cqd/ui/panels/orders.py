@@ -132,6 +132,8 @@ class OrdersPanel(Panel):
             self.table.setItem(i, 4, _cell(f"{row.volume:,.8g}"))
             self.table.setItem(i, 5, _cell(row.price_str))
             btn = QPushButton("Cancel")
+            # Compact style: the default button padding clips inside table rows.
+            btn.setProperty("role", "table-action")
             btn.clicked.connect(lambda _c=False, txid=row.txid: self._on_cancel(txid))
             self.table.setCellWidget(i, 6, btn)
 

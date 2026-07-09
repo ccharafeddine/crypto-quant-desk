@@ -50,6 +50,25 @@ def order_service() -> OrderService:
     return _service
 
 
+async def ensure_paper_seeded() -> None:
+    """Seed the paper overlay from the account snapshot on first use.
+
+    Without this the broker starts with zero balances and rejects every paper
+    order as unaffordable (found via the audit log during the 3.8 gate).
+    Uses make_client(), so demo mode seeds from the demo book and a live
+    account seeds from real balances.
+    """
+    broker = paper_broker()
+    if broker.balances:
+        return
+    from cqd.data.client import make_client
+
+    client = make_client()
+    async with client as c:
+        balances = await c.get_balance()
+    broker.seed_if_empty(balances)
+
+
 async def pair_specs() -> dict[str, PairSpec]:
     """Friendly pair name ("XBTUSD") -> PairSpec, cached for the session.
 

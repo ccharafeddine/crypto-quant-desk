@@ -155,6 +155,12 @@ QPushButton {
 QPushButton:hover { border-color: ${accent}; }
 QPushButton:pressed { background-color: ${border}; }
 QPushButton:default { border-color: ${accent}; }
+/* Buttons embedded in table rows: compact, or the row height clips the text. */
+QPushButton[role="table-action"] {
+    padding: 1px 8px;
+    font-size: 11px;
+    min-height: 0;
+}
 
 QLineEdit, QTextEdit, QPlainTextEdit {
     background-color: ${surface};
