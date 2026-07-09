@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import os
+from datetime import datetime
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QAction, QActionGroup
 from PySide6.QtWidgets import (
     QApplication,
@@ -32,6 +33,7 @@ from cqd.ui.panels.orders import OrdersPanel
 from cqd.ui.panels.positions import PositionsPanel
 from cqd.ui.panels.risk import RiskPanel
 from cqd.ui.panels.ticket import TicketPanel
+from cqd.ui.stream import StreamBridge
 from cqd.ui.theme import THEMES, build_qss, get_theme, load_theme_name, save_theme_name
 from cqd.ui.widgets import Badge
 
@@ -56,6 +58,7 @@ class MainWindow(QMainWindow):
         self._build_panels()
         self._build_menus()
         self._build_status_bar()
+        self._build_stream()
 
     def _build_header(self) -> None:
         """Slim in-window header bar above the docks (identity + mode badge)."""
@@ -167,7 +170,62 @@ class MainWindow(QMainWindow):
     def _build_status_bar(self) -> None:
         bar = QStatusBar(self)
         self.setStatusBar(bar)
+        # Permanent right-side widgets: stream health + last-tick clock.
+        self._tick_clock = QLabel("")
+        self._tick_clock.setProperty("role", "footnote")
+        bar.addPermanentWidget(self._tick_clock)
+        self._stream_label = QLabel("STREAM: OFFLINE")
+        self._stream_label.setProperty("role", "stream-state")
+        self._stream_label.setProperty("streamState", "offline")
+        bar.addPermanentWidget(self._stream_label)
         self._update_status_message()
+
+    # ---------- live stream ----------
+
+    def _build_stream(self) -> None:
+        self.stream = StreamBridge(self)
+        self.stream.tick.connect(self._on_tick)
+        self.stream.state_changed.connect(self._on_stream_state)
+        self.stream.execution.connect(self._on_execution)
+        self.positions_panel.symbols_available.connect(self.stream.ensure_symbols)
+        self.ticket_panel.pair_selected.connect(lambda s: self.stream.ensure_symbols([s]))
+
+        # While the stream is degraded, fall back to REST polling; on recovery
+        # resync open orders (they may have changed while we were dark).
+        self._fallback_timer = QTimer(self)
+        self._fallback_timer.setInterval(30_000)
+        self._fallback_timer.timeout.connect(self.positions_panel.refresh)
+        self._fallback_timer.timeout.connect(self.ticket_panel.refresh)
+
+        self.stream.start()
+
+    def _on_tick(self, symbol: str, price: float) -> None:
+        self.positions_panel.on_tick(symbol, price)
+        self.ticket_panel.on_tick(symbol, price)
+        self._tick_clock.setText(f"last tick {datetime.now():%H:%M:%S}")
+
+    def _on_stream_state(self, state: str) -> None:
+        self._stream_label.setText(f"STREAM: {state.upper()}")
+        self._stream_label.setProperty("streamState", state)
+        style = self._stream_label.style()
+        style.unpolish(self._stream_label)
+        style.polish(self._stream_label)
+        if state == "live":
+            if self._fallback_timer.isActive():
+                self._fallback_timer.stop()
+                self.orders_panel.refresh()  # resync after being dark
+        else:
+            self._fallback_timer.start()
+
+    def _on_execution(self, data: dict) -> None:
+        self.orders_panel.refresh()
+        exec_type = str(data.get("exec_type", "update"))
+        order_id = str(data.get("order_id", ""))
+        self.statusBar().showMessage(f"Order {exec_type}: {order_id}", 4000)
+
+    def closeEvent(self, event) -> None:  # noqa: N802 - Qt naming
+        self.stream.stop()
+        super().closeEvent(event)
 
     def _update_status_message(self) -> None:
         mode = services.trading_mode().upper()

@@ -200,6 +200,12 @@ QLabel[role="metric-value"] {
     color: ${text};
     font-family: ${font_mono};
 }
+/* Stream health indicator in the status bar. */
+QLabel[role="stream-state"] { font-size: 11px; font-weight: 700; padding-right: 6px; }
+QLabel[role="stream-state"][streamState="live"] { color: ${positive}; }
+QLabel[role="stream-state"][streamState="delayed"] { color: ${accent}; }
+QLabel[role="stream-state"][streamState="offline"] { color: ${negative}; }
+
 /* Small tinted pill - accent text + accent border on surface, never a fill. */
 QLabel[role="badge"] {
     background-color: ${surface};

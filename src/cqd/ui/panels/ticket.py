@@ -112,11 +112,14 @@ class TicketPanel(Panel):
 
     #: Emitted after any successful submit so the orders panel can refresh.
     order_submitted = Signal()
+    #: Emitted on pair change so the stream subscribes the slash symbol.
+    pair_selected = Signal(str)  # "BTC/USD"
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self._specs: dict[str, PairSpec] = {}
         self._mark: float | None = None
+        self._slash: str | None = None
 
         header = PanelHeader("Order ticket")
         self.mode_badge = Badge("PAPER")
@@ -205,8 +208,18 @@ class TicketPanel(Panel):
         self._on_pair_changed(default)
 
     def _on_pair_changed(self, name: str) -> None:
-        if name in self._specs:
-            asyncio.ensure_future(self._load_mark(name))
+        spec = self._specs.get(name)
+        if spec is None:
+            return
+        self._slash = f"{translate_asset(spec.base)}/{translate_asset(spec.quote)}"
+        self.pair_selected.emit(self._slash)
+        asyncio.ensure_future(self._load_mark(name))
+
+    def on_tick(self, symbol: str, price: float) -> None:
+        """Live mark for the selected pair, streamed."""
+        if symbol == self._slash:
+            self._mark = price
+            self.mark_label.setText(f"{price:,.8g}")
 
     async def _load_mark(self, name: str) -> None:
         gen = self._begin_load()

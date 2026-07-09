@@ -1,9 +1,8 @@
 # progress.txt — crypto-quant-desk v2 overhaul
 
-Status: Phase 3 — COMPLETE. 3.8 live-fire gate PASSED 2026-07-09 (owner placed
-a $7 live limit sell, saw the ack in Open Orders, cancelled it; full audit
-trail: submit 09:01:18Z -> ack 09:01:19Z -> cancel 09:05:37Z).
-Next: Phase 4 (WebSocket streaming) per docs/IMPLEMENTATION_PLAN.md.
+Status: Phase 4 — COMPLETE (WebSocket streaming live).
+Next: Phase 5 (analytics: performance engine, equity curve, alerts) per
+docs/IMPLEMENTATION_PLAN.md. 5.5 depth panel can ride the existing WS client.
 Last session: 2026-07-09
 
 ## Done
@@ -67,11 +66,21 @@ Last session: 2026-07-09
   paper order rejected as unaffordable - the gate's dry run caught it);
   compact QSS for buttons inside table rows (cancel button was clipped).
 
+- 2026-07-09: Phase 4 complete (223 tests, live-socket smoke passed):
+  data/ws.py KrakenWSClient (v2 ticker + executions, pure parse_message,
+  heartbeat watchdog -> delayed -> forced reconnect, exponential backoff,
+  on-the-fly + reconnect-safe resubscription; hermetic tests vs scripted fake
+  connections) · ui/stream.py StreamBridge (Qt signals; private socket only
+  for real keyed accounts; worst-of state) · Positions in-place mark/value
+  updates w/ direction flash · ticket live mark · status-bar STREAM indicator
+  + last-tick clock · 30s REST fallback while degraded, orders resync on
+  recovery · execution events refresh Orders with a toast.
+
 ## Next
-- Phase 4 (WebSocket streaming): 4.1 data/ws.py public ticker + heartbeat
-  watchdog + backoff reconnect (tested vs fake server) -> 4.2 live marks in
-  Positions/ticket + DELAYED badge + REST fallback -> 4.3 private executions
-  stream driving the Orders panel + resync on reconnect -> 4.4 PnL tick flash.
+- Phase 5 (analytics): 5.1 engine/performance.py (equity curve from ledgers,
+  realized PnL per (asset,quote), round-trips, trade stats) -> 5.2 Performance
+  panel (pyqtgraph equity/drawdown) -> 5.3 alerts engine (+winotify) ->
+  5.4 alerts panel -> 5.5 depth ladder via WS book channel.
 
 ## Environment notes
 - Windows box: repo at C:\Users\mnc-9\crypto-quant-desk, venv at .venv (installed,

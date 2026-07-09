@@ -9,7 +9,8 @@ from __future__ import annotations
 
 import asyncio
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtGui import QBrush, QColor
 from PySide6.QtWidgets import (
     QHeaderView,
     QLabel,
@@ -53,10 +54,13 @@ class PositionsPanel(Panel):
 
     #: Emitted from the row context menu; the ticket pre-fills a market sell.
     close_requested = Signal(str, float)  # asset, quantity
+    #: Emitted after each populate so the stream can subscribe held assets.
+    symbols_available = Signal(list)  # ["BTC/USD", ...]
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self._row_data: list[tuple[str, float]] = []
+        self._live_marks: dict[str, float] = {}
 
         self._layout.addWidget(PanelHeader("Positions"))
 
@@ -116,6 +120,7 @@ class PositionsPanel(Panel):
         rows = [(a, q) for a, q in balances.items() if q and q > 0]
         rows.sort(key=lambda r: r[0])
         self._row_data = rows
+        self.symbols_available.emit([f"{a}/USD" for a, _ in rows if a != "USD"])
 
         # Clear stale items before resizing so no orphaned cells linger.
         self.table.clearContents()
@@ -137,6 +142,42 @@ class PositionsPanel(Panel):
             self.table.setItem(i, 3, _cell(f"${value:,.2f}" if mark else "-"))
             self.table.setItem(i, 4, _cell(avg_str))
             self.table.setItem(i, 5, _cell(be_str))
+
+    # ---------- live stream ----------
+
+    def on_tick(self, symbol: str, price: float) -> None:
+        """Update mark/value in place; flash by direction (never a rebuild)."""
+        asset = symbol.split("/")[0]
+        for i, (a, qty) in enumerate(self._row_data):
+            if a != asset:
+                continue
+            mark_item = self.table.item(i, 2)
+            value_item = self.table.item(i, 3)
+            if mark_item is None or value_item is None:
+                return
+            prev = self._live_marks.get(symbol)
+            self._live_marks[symbol] = price
+            mark_item.setText(f"${price:,.6f}")
+            value_item.setText(f"${qty * price:,.2f}")
+            if prev is not None and price != prev:
+                self._flash(value_item, up=price > prev)
+            return
+
+    def _flash(self, item: QTableWidgetItem, *, up: bool) -> None:
+        from cqd.ui.theme import get_theme, load_theme_name
+
+        theme = get_theme(load_theme_name())
+        color = QColor(theme.positive if up else theme.negative)
+        color.setAlpha(64)  # 25% per the motion rules
+        item.setBackground(QBrush(color))
+
+        def clear() -> None:
+            try:
+                item.setBackground(QBrush())
+            except RuntimeError:
+                pass  # row was rebuilt while the flash was pending
+
+        QTimer.singleShot(400, clear)
 
     def _on_context_menu(self, pos) -> None:
         row = self.table.rowAt(pos.y())
