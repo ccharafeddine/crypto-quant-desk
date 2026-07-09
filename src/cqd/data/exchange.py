@@ -18,6 +18,12 @@ import shutil
 import sys
 from typing import Any
 
+from cqd.data.errors import (
+    KrakenAuthError,
+    KrakenError,
+    KrakenProtocolError,
+    KrakenTimeoutError,
+)
 from cqd.data.normalize import (
     normalize_balance,
     normalize_ohlc,
@@ -25,29 +31,22 @@ from cqd.data.normalize import (
     normalize_trades,
 )
 
+__all__ = [
+    "KrakenAuthError",
+    "KrakenCLIError",
+    "KrakenCLINotFound",
+    "KrakenClient",
+    "KrakenProtocolError",
+    "KrakenTimeoutError",
+]
 
-class KrakenCLIError(Exception):
+
+class KrakenCLIError(KrakenError):
     """The kraken CLI returned a nonzero exit or an {"error": ...} body."""
-
-
-class KrakenAuthError(KrakenCLIError):
-    """The CLI rejected the call for missing/invalid credentials."""
 
 
 class KrakenCLINotFound(KrakenCLIError):
     """The kraken binary could not be located."""
-
-
-class KrakenTimeoutError(KrakenCLIError):
-    """The CLI did not respond within the timeout (hung network/process)."""
-
-
-class KrakenProtocolError(KrakenCLIError):
-    """The CLI exited 0 but its output was not valid JSON (truncated stdout).
-
-    Raised instead of returning None-as-data: a truncated trade history would
-    otherwise silently render as "no trades" (audit finding 7).
-    """
 
 
 class KrakenClient:
@@ -186,7 +185,7 @@ class KrakenClient:
             return normalize_ticker(raw)
         except KrakenCLINotFound:
             raise
-        except KrakenCLIError:
+        except KrakenError:
             if len(pairs) == 1:
                 return {}
             out: dict[str, float] = {}
@@ -194,7 +193,7 @@ class KrakenClient:
                 try:
                     raw = await self._run(["ticker", pair], private=False)
                     out.update(normalize_ticker(raw))
-                except KrakenCLIError:
+                except KrakenError:
                     continue
             return out
 

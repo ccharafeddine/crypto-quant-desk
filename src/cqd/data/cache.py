@@ -3,15 +3,13 @@
 from __future__ import annotations
 
 import functools
-from pathlib import Path
 from typing import Awaitable, Callable, TypeVar
 
 from diskcache import Cache
 
-_CACHE_DIR = Path.home() / ".cqd" / "cache"
-_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+from cqd.data.paths import cache_dir
 
-cache = Cache(str(_CACHE_DIR))
+cache = Cache(str(cache_dir()))
 
 T = TypeVar("T")
 

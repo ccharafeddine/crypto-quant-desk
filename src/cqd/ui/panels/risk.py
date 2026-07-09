@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (
 )
 
 from cqd.data.client import make_client
-from cqd.data.exchange import KrakenAuthError, KrakenCLIError
+from cqd.data.errors import KrakenAuthError, KrakenError
 from cqd.data.portfolio import AccountRisk, EmptyPortfolioError, compute_account_risk
 from cqd.ui.panels.base import Panel
 from cqd.ui.widgets import Badge, PanelHeader
@@ -202,12 +202,12 @@ class RiskPanel(Panel):
         except KrakenAuthError:
             if self._is_current(gen):
                 self.status.setText(
-                    "Authentication failed. Check your Kraken keys, or set "
-                    "CQD_DATA_SOURCE=demo to explore with sample data."
+                    "Authentication failed. Check your Kraken keys in "
+                    "File > Settings, or switch to demo data there."
                 )
-        except KrakenCLIError as e:
+        except KrakenError as e:
             if self._is_current(gen):
-                self.status.setText(f"Kraken CLI error: {e}")
+                self.status.setText(f"Kraken error: {e}")
         except Exception as e:  # noqa: BLE001
             if self._is_current(gen):
                 self.status.setText(f"Error: {e}")
