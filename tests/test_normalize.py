@@ -214,6 +214,28 @@ def test_split_pair_fiat_still_works_after_crypto_quotes() -> None:
     assert split_pair("SOLUSDT") == ("SOL", "USDT")
 
 
+def test_split_pair_bare_base_ending_in_z() -> None:
+    # Regression (2026-07-09 audit): bare bases ending in Z faked the classic
+    # ZUSD suffix and lost their last letter, dropping real holdings from risk.
+    assert split_pair("XTZUSD") == ("XTZ", "USD")  # Tezos, not "XT"/USD
+    assert split_pair("XTZEUR") == ("XTZ", "EUR")
+    assert split_pair("REZUSD") == ("REZ", "USD")  # Renzo, not "RE"/USD
+    assert split_pair("XTZXBT") == ("XTZ", "BTC")
+
+
+def test_split_pair_classic_pairs_unaffected_by_z_guard() -> None:
+    # Classic bases keep matching classic quotes.
+    assert split_pair("XZECZUSD") == ("ZEC", "USD")  # heuristic X-prefix base
+    assert split_pair("USDTZUSD") == ("USDT", "USD")  # aliased bare base
+    assert split_pair("ZEURZUSD") == ("EUR", "USD")  # fiat/fiat classic pair
+    assert split_pair("XETHXXBT") == ("ETH", "BTC")
+
+
+def test_split_pair_bare_eth_quote() -> None:
+    # Newer alts quote against bare ETH (ADAETH), not XETH.
+    assert split_pair("ADAETH") == ("ADA", "ETH")
+
+
 def test_slash_symbol_crypto_quote() -> None:
     assert slash_symbol("DOTXBT") == "DOT/BTC"
     assert slash_symbol("XXDGXXBT") == "DOGE/BTC"

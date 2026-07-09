@@ -62,10 +62,11 @@ _QUOTE_SUFFIXES: tuple[str, ...] = (
     "JPY",
 )
 
-# Crypto quote codes (XXBT/XBT -> BTC, XETH -> ETH). Real accounts trade alts
-# against BTC/ETH (e.g. DOTXBT, XXDGXXBT), so split_pair must recognize these as
-# quotes - but they are NOT cash, hence kept separate from _QUOTE_SUFFIXES.
-_CRYPTO_QUOTE_SUFFIXES: tuple[str, ...] = ("XXBT", "XETH", "XBT")
+# Crypto quote codes (XXBT/XBT -> BTC, XETH/ETH -> ETH). Real accounts trade
+# alts against BTC/ETH (e.g. DOTXBT, ADAETH, XXDGXXBT), so split_pair must
+# recognize these as quotes - but they are NOT cash, hence kept separate from
+# _QUOTE_SUFFIXES.
+_CRYPTO_QUOTE_SUFFIXES: tuple[str, ...] = ("XXBT", "XETH", "XBT", "ETH")
 
 # For pair splitting only: all quote codes, LONGEST FIRST so the first
 # endswith-match is the most specific (ZUSD before USD, XXBT before XBT). sorted
@@ -73,6 +74,18 @@ _CRYPTO_QUOTE_SUFFIXES: tuple[str, ...] = ("XXBT", "XETH", "XBT")
 _PAIR_QUOTE_SUFFIXES: tuple[str, ...] = tuple(
     sorted(_QUOTE_SUFFIXES + _CRYPTO_QUOTE_SUFFIXES, key=len, reverse=True)
 )
+
+# Classic X/Z-prefixed quote codes only ever appear in classic pairs, where the
+# base is itself a classic code (XXBTZUSD, XETHXXBT, XXDGXXBT). A BARE base that
+# happens to end in Z or X can fake one of these suffixes when joined to a bare
+# quote: XTZUSD is XTZ+USD, not XT+ZUSD; REZUSD is REZ+USD. split_pair therefore
+# accepts a classic-suffix match only when the leftover base also looks classic,
+# and otherwise keeps scanning down to the bare quote.
+_CLASSIC_QUOTE_SUFFIXES: frozenset[str] = frozenset({"ZUSD", "ZEUR", "ZGBP", "ZJPY", "XXBT", "XETH"})
+
+
+def _is_classic_base(base: str) -> bool:
+    return base in _ASSET_ALIASES or (len(base) >= 4 and base[0] in ("X", "Z"))
 
 
 def translate_asset(cli_asset: str) -> str:
@@ -103,10 +116,14 @@ def split_pair(cli_pair: str) -> tuple[str, str]:
 
     Matches the longest known quote suffix (fiat/stable and crypto); the
     remainder is the base. Both halves are then translated via `translate_asset`.
+    Classic-suffix matches (ZUSD, XXBT, ...) additionally require a classic-
+    looking base, so bare bases ending in Z/X (XTZ, REZ) split correctly.
     """
     for suffix in _PAIR_QUOTE_SUFFIXES:
         if cli_pair.endswith(suffix) and len(cli_pair) > len(suffix):
             base = cli_pair[: -len(suffix)]
+            if suffix in _CLASSIC_QUOTE_SUFFIXES and not _is_classic_base(base):
+                continue
             return translate_asset(base), translate_asset(suffix)
     # No known suffix: translate the whole thing as base, empty quote.
     return translate_asset(cli_pair), ""
