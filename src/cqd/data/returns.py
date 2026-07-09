@@ -127,12 +127,20 @@ async def build_returns_frame(
     fetch_set = list(dict.fromkeys([*assets, btc_symbol]))
 
     # Fetch only the real (non-cash) assets; cash has no {quote}{quote} market.
+    # One asset's failed fetch (no {sym}{quote} pair, transient CLI error) drops
+    # that asset instead of failing the whole frame; the engine renormalizes
+    # weights over the remaining columns. Dropped symbols are reported via
+    # DataFrame.attrs["dropped_assets"] so the caller can surface a caveat.
     real_closes: dict[str, list[tuple[int, float]]] = {}
+    dropped: list[str] = []
     for sym in fetch_set:
         if _is_cash(sym, quote):
             continue
         pair = f"{sym}{quote}"
-        real_closes[sym] = await client.get_ohlc_closes(pair, interval=interval)
+        try:
+            real_closes[sym] = await client.get_ohlc_closes(pair, interval=interval)
+        except Exception:  # noqa: BLE001 - degrade per asset, never per frame
+            dropped.append(sym)
 
     # Union of real timestamps; cash series are pinned to these dates at 1.0.
     timestamps = sorted({ts for pts in real_closes.values() for ts, _ in pts})
@@ -140,9 +148,13 @@ async def build_returns_frame(
     # Rebuild in original fetch order so column order is stable.
     closes: dict[str, list[tuple[int, float]]] = {}
     for sym in fetch_set:
+        if sym in dropped:
+            continue
         if sym in real_closes:
             closes[sym] = real_closes[sym]
         else:
             closes[sym] = [(ts, 1.0) for ts in timestamps]
 
-    return closes_to_returns(closes, days=days)
+    frame = closes_to_returns(closes, days=days)
+    frame.attrs["dropped_assets"] = dropped
+    return frame

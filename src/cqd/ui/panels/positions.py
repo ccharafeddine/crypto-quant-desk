@@ -92,20 +92,11 @@ class PositionsPanel(Panel):
     ) -> dict[str, float]:
         assets = [a for a, v in balances.items() if v and v > 0 and a != "USD"]
         # CLI input is the friendly form "BTCUSD"; marks come back slash-keyed.
+        # get_marks degrades per pair itself (bad pairs are simply absent).
         pairs = [f"{a}USD" for a in assets]
         if not pairs:
             return {}
-        try:
-            return await client.get_marks(pairs)
-        except Exception:  # noqa: BLE001
-            # Some pairs may not exist; fall back to per-pair fetches.
-            out: dict[str, float] = {}
-            for a in assets:
-                try:
-                    out.update(await client.get_marks([f"{a}USD"]))
-                except Exception:  # noqa: BLE001
-                    continue
-            return out
+        return await client.get_marks(pairs)
 
     def _populate(
         self,

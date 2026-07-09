@@ -139,6 +139,32 @@ def test_get_trades_success() -> None:
     assert t["fee"] == {"cost": 91.0, "currency": "USD"}
 
 
+# ---------- per-pair degradation ----------
+
+
+def test_get_marks_degrades_per_pair_on_batch_failure() -> None:
+    # Regression (2026-07-09 audit): one unknown pair (delisted, ETH2 from a
+    # folded sub-balance) failed the whole ticker batch and blanked the Risk
+    # panel. The wrapper must retry per pair and skip only the bad ones.
+    error_body = json.dumps({"error": "api", "message": "Unknown asset pair"}).encode()
+    good_body = json.dumps(TICKER_JSON).encode()
+    # Batch fails, then per-pair: BTCUSD succeeds, ETH2USD fails.
+    responses = [
+        _FakeProc(error_body, b"", 1),
+        _FakeProc(good_body, b"", 0),
+        _FakeProc(error_body, b"", 1),
+    ]
+
+    async def _fake_exec(*args, **kwargs):
+        return responses.pop(0)
+
+    with patch("asyncio.create_subprocess_exec", side_effect=_fake_exec):
+        out = asyncio.run(_client().get_marks(["BTCUSD", "ETH2USD"]))
+
+    assert out == {"BTC/USD": 70860.0}  # bad pair absent, not raised
+    assert not responses  # all three calls were made
+
+
 # ---------- error paths ----------
 
 

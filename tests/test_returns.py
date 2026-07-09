@@ -153,8 +153,10 @@ def test_cash_asset_not_fetched_and_zero_returns() -> None:
     # USD stays as a column and is all zeros (constant-1.0 price -> 0 returns).
     assert "USD" in r.columns
     assert (r["USD"] == 0.0).all()
-    # The cash pair was never fetched.
+    # The cash pair was never fetched. (The guard stub raises if it is; that
+    # raise would now surface as a dropped asset, so assert none were dropped.)
     assert "USDUSD" not in client.requested
+    assert r.attrs["dropped_assets"] == []
     assert {"BTCUSD", "ETHUSD"} <= set(client.requested)
     # Real assets unaffected; BTC present.
     assert r["BTC"].iloc[0] == pytest.approx(0.10)
@@ -177,3 +179,34 @@ def test_quote_param_respected() -> None:
     r = asyncio.run(build_returns_frame(client, ["BTC", "EUR"], quote="EUR"))
     assert client.requested == ["BTCEUR"]  # BTC fetched in EUR, EUR not fetched
     assert (r["EUR"] == 0.0).all()
+
+
+# ---------- per-asset degradation (2026-07-09 audit) ----------
+
+
+class _FailingStubClient:
+    """Stub where selected assets raise (no such pair / transient CLI error)."""
+
+    def __init__(self, data: dict[str, list[tuple[int, float]]], bad: set[str]) -> None:
+        self._data = data
+        self._bad = bad
+
+    async def get_ohlc_closes(self, pair, *, interval=1440, since=None):
+        bare = pair[:-3]
+        if bare in self._bad:
+            raise RuntimeError(f"EQuery:Unknown asset pair: {pair}")
+        return self._data[bare]
+
+
+def test_one_failed_asset_drops_not_fails() -> None:
+    # Regression: one failed OHLC fetch killed the whole returns frame and with
+    # it the Risk panel. The bad asset must be dropped and reported instead.
+    data = {
+        "BTC": [(D1, 100.0), (D2, 110.0), (D3, 121.0)],
+        "ETH": [(D1, 10.0), (D2, 11.0), (D3, 12.1)],
+    }
+    client = _FailingStubClient(data, bad={"ETH2"})
+    r = asyncio.run(build_returns_frame(client, ["BTC", "ETH", "ETH2"]))
+    assert set(r.columns) == {"BTC", "ETH"}
+    assert r.attrs["dropped_assets"] == ["ETH2"]
+    assert r["BTC"].iloc[0] == pytest.approx(0.10)

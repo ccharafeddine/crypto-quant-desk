@@ -133,11 +133,31 @@ class KrakenClient:
         """Latest marks for `pairs` (friendly form, e.g. "BTCUSD").
 
         Returned dict is keyed by slash symbol ("BTC/USD") per the normalizer.
+
+        Degrades per pair: the CLI fails the WHOLE ticker call when any one
+        pair is unknown (delisted asset, folded sub-balance like ETH2), so on
+        batch failure each pair is retried alone and bad ones are skipped.
+        Callers detect a missing pair by its absence from the result; the
+        weights layer reports those as "unpriced" rather than erroring.
         """
         if not pairs:
             return {}
-        raw = await self._run(["ticker", *pairs], private=False)
-        return normalize_ticker(raw)
+        try:
+            raw = await self._run(["ticker", *pairs], private=False)
+            return normalize_ticker(raw)
+        except KrakenCLINotFound:
+            raise
+        except KrakenCLIError:
+            if len(pairs) == 1:
+                return {}
+            out: dict[str, float] = {}
+            for pair in pairs:
+                try:
+                    raw = await self._run(["ticker", pair], private=False)
+                    out.update(normalize_ticker(raw))
+                except KrakenCLIError:
+                    continue
+            return out
 
     async def get_ohlc_closes(
         self, pair: str, *, interval: int = 1440, since: int | None = None

@@ -126,6 +126,9 @@ async def compute_account_risk(
         )
 
     returns = await build_returns_frame(client, list(weights.index), days=days)
+    # Assets whose OHLC fetch failed were dropped from the frame; the engine
+    # renormalizes weights over the remaining columns. Surface them as a caveat.
+    info["returns_dropped"] = returns.attrs.get("dropped_assets", [])
     risk = compute_portfolio_risk(weights, returns, btc_col="BTC")
 
     return AccountRisk(
