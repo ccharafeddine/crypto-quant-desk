@@ -26,6 +26,7 @@ from cqd.data.errors import (
 )
 from cqd.data.normalize import (
     normalize_balance,
+    normalize_ledgers,
     normalize_ohlc,
     normalize_ticker,
     normalize_trades,
@@ -212,3 +213,14 @@ class KrakenClient:
             args += ["--end", str(end)]
         raw = await self._run(args, private=True)
         return normalize_trades(raw)
+
+    async def get_ledgers(
+        self, *, start: int | None = None, end: int | None = None
+    ) -> list[dict[str, Any]]:
+        args = ["ledgers"]
+        if start is not None:
+            args += ["--start", str(start)]
+        if end is not None:
+            args += ["--end", str(end)]
+        raw = await self._run(args, private=True)
+        return normalize_ledgers(raw)

@@ -8,6 +8,7 @@ off AND a real (non-demo) data source; anything else routes to paper.
 
 from __future__ import annotations
 
+from cqd.alerts.engine import AlertEngine
 from cqd.data.client import resolve_demo
 from cqd.data.errors import KrakenError
 from cqd.data.paths import app_data_dir
@@ -21,6 +22,14 @@ from cqd.ui import settings_store as store
 _paper: PaperBroker | None = None
 _service: OrderService | None = None
 _specs: dict[str, PairSpec] | None = None
+_alerts: AlertEngine | None = None
+
+
+def alert_engine() -> AlertEngine:
+    global _alerts
+    if _alerts is None:
+        _alerts = AlertEngine(app_data_dir() / "alerts.json")
+    return _alerts
 
 
 def trading_mode() -> str:
@@ -94,7 +103,8 @@ async def pair_specs() -> dict[str, PairSpec]:
 
 def reset_for_tests() -> None:
     """Drop singletons so tests get fresh state."""
-    global _paper, _service, _specs
+    global _paper, _service, _specs, _alerts
     _paper = None
     _service = None
     _specs = None
+    _alerts = None

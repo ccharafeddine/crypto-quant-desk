@@ -114,6 +114,8 @@ class TicketPanel(Panel):
     order_submitted = Signal()
     #: Emitted on pair change so the stream subscribes the slash symbol.
     pair_selected = Signal(str)  # "BTC/USD"
+    #: Same event in Kraken's friendly form, for REST consumers (depth panel).
+    kraken_pair_selected = Signal(str)  # "XBTUSD"
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -213,6 +215,7 @@ class TicketPanel(Panel):
             return
         self._slash = f"{translate_asset(spec.base)}/{translate_asset(spec.quote)}"
         self.pair_selected.emit(self._slash)
+        self.kraken_pair_selected.emit(spec.pair)
         asyncio.ensure_future(self._load_mark(name))
 
     def on_tick(self, symbol: str, price: float) -> None:

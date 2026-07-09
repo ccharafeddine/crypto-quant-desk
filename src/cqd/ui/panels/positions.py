@@ -56,11 +56,14 @@ class PositionsPanel(Panel):
     close_requested = Signal(str, float)  # asset, quantity
     #: Emitted after each populate so the stream can subscribe held assets.
     symbols_available = Signal(list)  # ["BTC/USD", ...]
+    #: Per-tick unrealized PnL vs average cost, in percent (alert feed).
+    pnl_tick = Signal(str, float)  # asset, signed pct
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self._row_data: list[tuple[str, float]] = []
         self._live_marks: dict[str, float] = {}
+        self._avg_costs: dict[str, float] = {}
 
         self._layout.addWidget(PanelHeader("Positions"))
 
@@ -125,6 +128,7 @@ class PositionsPanel(Panel):
         # Clear stale items before resizing so no orphaned cells linger.
         self.table.clearContents()
         self.table.setRowCount(len(rows))
+        self._avg_costs.clear()
         for i, (asset, qty) in enumerate(rows):
             symbol = f"{asset}/USD"
             # USD cash has no USD/USD market: its mark is 1.0 by definition, so
@@ -134,7 +138,10 @@ class PositionsPanel(Panel):
             else:
                 mark = float(marks.get(symbol) or 0.0)
             value = qty * mark if mark else 0.0
-            avg_str, be_str = format_cost_basis(_safe_cost_basis(trades, asset))
+            cb = _safe_cost_basis(trades, asset)
+            if cb is not None and cb.avg_cost > 0 and cb.quote == "USD":
+                self._avg_costs[asset] = cb.avg_cost
+            avg_str, be_str = format_cost_basis(cb)
 
             self.table.setItem(i, 0, _cell(asset, align_left=True))
             self.table.setItem(i, 1, _cell(f"{qty:,.6f}"))
@@ -161,6 +168,9 @@ class PositionsPanel(Panel):
             value_item.setText(f"${qty * price:,.2f}")
             if prev is not None and price != prev:
                 self._flash(value_item, up=price > prev)
+            avg = self._avg_costs.get(asset)
+            if avg:
+                self.pnl_tick.emit(asset, (price / avg - 1.0) * 100.0)
             return
 
     def _flash(self, item: QTableWidgetItem, *, up: bool) -> None:

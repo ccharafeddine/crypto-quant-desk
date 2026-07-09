@@ -1,8 +1,8 @@
 # progress.txt — crypto-quant-desk v2 overhaul
 
-Status: Phase 4 — COMPLETE (WebSocket streaming live).
-Next: Phase 5 (analytics: performance engine, equity curve, alerts) per
-docs/IMPLEMENTATION_PLAN.md. 5.5 depth panel can ride the existing WS client.
+Status: Phase 5 — COMPLETE (analytics: performance, alerts, depth).
+Next: Phase 6 (AI analyst expansion) per docs/IMPLEMENTATION_PLAN.md, then
+Phase 7 (polish + Windows packaging).
 Last session: 2026-07-09
 
 ## Done
@@ -76,11 +76,22 @@ Last session: 2026-07-09
   + last-tick clock · 30s REST fallback while degraded, orders resync on
   recovery · execution events refresh Orders with a toast.
 
+- 2026-07-09: Phase 5 complete (242 tests): engine/performance.py (pure:
+  balances_over_time from ledger running balances, equity curve w/ unpriced
+  exclusions reported, realized round trips w/ avg-cost semantics, trade
+  stats, drawdown stats, periodic returns) · Performance panel (equity +
+  drawdown charts, stats grid, per-position PnL, quote-labeled) · alerts/
+  (edge-triggered rules w/ rearm-on-crossing, one-shot vs repeat, alerts.json,
+  winotify toasts) · Alerts panel (CRUD + history) · Depth panel (REST poll
+  2.5s - WS book checksums deferred, documented) · get_ledgers on CLI client,
+  synthetic coherent ledger on DemoClient · default layout tabified.
+
 ## Next
-- Phase 5 (analytics): 5.1 engine/performance.py (equity curve from ledgers,
-  realized PnL per (asset,quote), round-trips, trade stats) -> 5.2 Performance
-  panel (pyqtgraph equity/drawdown) -> 5.3 alerts engine (+winotify) ->
-  5.4 alerts panel -> 5.5 depth ladder via WS book channel.
+- Phase 6 (analyst): 6.1 analyst/llm.py Anthropic tool-use over engine
+  outputs (explicit action only, cost display) -> 6.2 panel actions
+  (commentary / trade review / ask) -> 6.3 optional kraken mcp via WSL.
+- Phase 7: polish pass (states, layout persistence), PyInstaller + Inno Setup
+  Windows installer, clean-VM test, README screenshots, tag v2.0.0.
 
 ## Environment notes
 - Windows box: repo at C:\Users\mnc-9\crypto-quant-desk, venv at .venv (installed,

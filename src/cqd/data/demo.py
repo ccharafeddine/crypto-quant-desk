@@ -100,6 +100,80 @@ class DemoClient:
     ) -> list[dict[str, Any]]:
         return [dict(t) for t in SAMPLE_TRADES]
 
+    async def get_ledgers(
+        self, *, start: int | None = None, end: int | None = None
+    ) -> list[dict[str, Any]]:
+        """Synthetic ledger consistent with the sample book.
+
+        Cash legs arrive as deposits at t0; each crypto buy produces the
+        matching asset-credit / cash-debit pair, so the equity curve engine
+        sees a coherent history (real market data still prices it).
+        """
+        entries: list[dict[str, Any]] = []
+        t0 = 1704067200.0 - 86400.0  # the day before the first demo buy
+        cash = SAMPLE_BOOK["USD"] + sum(
+            amount * price for legs in _TRADE_SPEC.values() for amount, price, _ in legs
+        )
+        entries.append(
+            {
+                "refid": "DEMO-DEPOSIT",
+                "time": t0,
+                "type": "deposit",
+                "subtype": "",
+                "asset": "USD",
+                "amount": cash,
+                "fee": 0.0,
+                "balance": cash,
+            }
+        )
+        entries.append(
+            {
+                "refid": "DEMO-DEPOSIT-USDC",
+                "time": t0,
+                "type": "deposit",
+                "subtype": "",
+                "asset": "USDC",
+                "amount": SAMPLE_BOOK["USDC"],
+                "fee": 0.0,
+                "balance": SAMPLE_BOOK["USDC"],
+            }
+        )
+        usd = cash
+        held: dict[str, float] = {}
+        events: list[tuple[float, str, float, float]] = []  # ts, asset, qty, cost
+        for symbol, legs in _TRADE_SPEC.items():
+            asset = symbol.split("/")[0]
+            for amount, price, ts in legs:
+                events.append((float(ts), asset, amount, amount * price))
+        for ts, asset, qty, cost in sorted(events):
+            held[asset] = held.get(asset, 0.0) + qty
+            usd -= cost
+            entries.append(
+                {
+                    "refid": f"DEMO-{asset}-{int(ts)}",
+                    "time": ts,
+                    "type": "trade",
+                    "subtype": "",
+                    "asset": asset,
+                    "amount": qty,
+                    "fee": 0.0,
+                    "balance": held[asset],
+                }
+            )
+            entries.append(
+                {
+                    "refid": f"DEMO-USD-{int(ts)}",
+                    "time": ts,
+                    "type": "trade",
+                    "subtype": "",
+                    "asset": "USD",
+                    "amount": -cost,
+                    "fee": 0.0,
+                    "balance": usd,
+                }
+            )
+        return entries
+
     # ---------- market data: delegate to the real CLI, unchanged ----------
 
     async def get_marks(self, pairs: list[str]) -> dict[str, float]:

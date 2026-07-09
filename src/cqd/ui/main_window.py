@@ -27,9 +27,13 @@ from cqd.ui import services
 from cqd.ui import settings_store as store
 from cqd.ui.dialogs.first_run import CHOICE_CONNECT, FirstRunDialog
 from cqd.ui.dialogs.settings import SettingsDialog
+from cqd.alerts.notify import send_toast
+from cqd.ui.panels.alerts import AlertsPanel
 from cqd.ui.panels.analyst import AnalystPanel
+from cqd.ui.panels.book import BookPanel
 from cqd.ui.panels.chart import ChartPanel
 from cqd.ui.panels.orders import OrdersPanel
+from cqd.ui.panels.performance import PerformancePanel
 from cqd.ui.panels.positions import PositionsPanel
 from cqd.ui.panels.risk import RiskPanel
 from cqd.ui.panels.ticket import TicketPanel
@@ -88,18 +92,38 @@ class MainWindow(QMainWindow):
         self.analyst_panel = AnalystPanel(self)
         self.ticket_panel = TicketPanel(self)
         self.orders_panel = OrdersPanel(self)
+        self.performance_panel = PerformancePanel(self)
+        self.alerts_panel = AlertsPanel(self)
+        self.book_panel = BookPanel(self)
 
-        self._add_dock(self.positions_panel, "Positions", Qt.DockWidgetArea.LeftDockWidgetArea)
-        self._add_dock(self.risk_panel, "Risk", Qt.DockWidgetArea.RightDockWidgetArea)
-        self._add_dock(self.chart_panel, "Chart", Qt.DockWidgetArea.RightDockWidgetArea)
-        self._add_dock(self.ticket_panel, "Ticket", Qt.DockWidgetArea.RightDockWidgetArea)
-        self._add_dock(self.analyst_panel, "Analyst", Qt.DockWidgetArea.BottomDockWidgetArea)
-        self._add_dock(self.orders_panel, "Orders", Qt.DockWidgetArea.BottomDockWidgetArea)
+        left = Qt.DockWidgetArea.LeftDockWidgetArea
+        right = Qt.DockWidgetArea.RightDockWidgetArea
+        bottom = Qt.DockWidgetArea.BottomDockWidgetArea
+        d_positions = self._add_dock(self.positions_panel, "Positions", left)
+        d_perf = self._add_dock(self.performance_panel, "Performance", left)
+        self._add_dock(self.risk_panel, "Risk", right)
+        d_chart = self._add_dock(self.chart_panel, "Chart", right)
+        d_ticket = self._add_dock(self.ticket_panel, "Ticket", right)
+        d_book = self._add_dock(self.book_panel, "Depth", right)
+        d_analyst = self._add_dock(self.analyst_panel, "Analyst", bottom)
+        d_orders = self._add_dock(self.orders_panel, "Orders", bottom)
+        d_alerts = self._add_dock(self.alerts_panel, "Alerts", bottom)
+        # Stack related panels as tabs so the default layout stays readable.
+        self.tabifyDockWidget(d_positions, d_perf)
+        self.tabifyDockWidget(d_chart, d_ticket)
+        self.tabifyDockWidget(d_ticket, d_book)
+        self.tabifyDockWidget(d_analyst, d_orders)
+        self.tabifyDockWidget(d_orders, d_alerts)
+        d_positions.raise_()
+        d_ticket.raise_()
+        d_orders.raise_()
 
         # Trading flows: submissions refresh open orders; Positions "Close"
-        # pre-fills the ticket (never auto-submits).
+        # pre-fills the ticket (never auto-submits); the depth ladder follows
+        # the ticket's pair.
         self.ticket_panel.order_submitted.connect(self.orders_panel.refresh)
         self.positions_panel.close_requested.connect(self.ticket_panel.prefill_close)
+        self.ticket_panel.kraken_pair_selected.connect(self.book_panel.set_pair)
 
     def _add_dock(self, widget, title: str, area: Qt.DockWidgetArea) -> QDockWidget:
         dock = QDockWidget(title, self)
@@ -190,6 +214,15 @@ class MainWindow(QMainWindow):
         self.positions_panel.symbols_available.connect(self.stream.ensure_symbols)
         self.ticket_panel.pair_selected.connect(lambda s: self.stream.ensure_symbols([s]))
 
+        # Alerts: price rules ride ticks, PnL rules ride the positions feed,
+        # drawdown rules ride the performance panel's refresh.
+        self.positions_panel.pnl_tick.connect(self._on_pnl_tick)
+        self.performance_panel.drawdown_updated.connect(self._on_drawdown)
+        self.alerts_panel.symbols_needed = lambda s: self.stream.ensure_symbols([s])
+        for rule in services.alert_engine().rules:
+            if rule.symbol:
+                self.stream.ensure_symbols([rule.symbol])
+
         # While the stream is degraded, fall back to REST polling; on recovery
         # resync open orders (they may have changed while we were dark).
         self._fallback_timer = QTimer(self)
@@ -203,6 +236,20 @@ class MainWindow(QMainWindow):
         self.positions_panel.on_tick(symbol, price)
         self.ticket_panel.on_tick(symbol, price)
         self._tick_clock.setText(f"last tick {datetime.now():%H:%M:%S}")
+        self._handle_fired(services.alert_engine().on_price(symbol, price))
+
+    def _on_pnl_tick(self, asset: str, pct: float) -> None:
+        self._handle_fired(services.alert_engine().on_position_pnl(asset, pct))
+
+    def _on_drawdown(self, drawdown: float) -> None:
+        self._handle_fired(services.alert_engine().on_drawdown(drawdown))
+
+    def _handle_fired(self, fired: list) -> None:
+        for alert in fired:
+            send_toast("Crypto Quant Desk alert", alert.message)
+            self.statusBar().showMessage(f"ALERT: {alert.message}", 8000)
+        if fired:
+            self.alerts_panel.on_fired()
 
     def _on_stream_state(self, state: str) -> None:
         self._stream_label.setText(f"STREAM: {state.upper()}")
@@ -306,6 +353,9 @@ class MainWindow(QMainWindow):
             self.analyst_panel,
             self.ticket_panel,
             self.orders_panel,
+            self.performance_panel,
+            self.alerts_panel,
+            self.book_panel,
         )
         for panel in panels:
             if hasattr(panel, "refresh"):
