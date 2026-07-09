@@ -19,3 +19,16 @@ One entry per correction or debugging session. Format: date, what went wrong, th
   re-derive the expected value from first principles before trusting either.
 - PowerShell 5.1 mangles double quotes inside `git commit -m` here-strings. Rule: write
   commit messages to a temp file and use `git commit -F <file>`.
+
+## 2026-07-09 — Phase 2 debugging
+
+- Silent app death with no traceback: modal dialogs exec'd BEFORE
+  loop.run_forever() stepped an ensure_future task outside a running qasync
+  loop, and PySide6 treats exceptions reaching a Qt event handler as fatal.
+  Rules: (1) never exec() a dialog that schedules async work before the loop
+  runs - defer with QTimer.singleShot(0, ...); (2) a GUI app gets file-based
+  crash logging (excepthook + loop exception handler) from day one, because
+  pythonw has no stderr.
+- One state file, many writers: each panel's client got its own NonceCounter
+  over the same file, risking duplicate nonces under concurrency. Rule: state
+  with a uniqueness invariant gets exactly one process-wide owner.

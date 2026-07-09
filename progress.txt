@@ -1,7 +1,9 @@
 # progress.txt — crypto-quant-desk v2 overhaul
 
-Status: Phase 2 — code complete; step 2.9 keyed-account check awaits owner.
-Next: owner connects real keys via File > Settings, then Phase 3 (trading core).
+Status: Phase 2 — COMPLETE (2.9 verified 2026-07-09: owner connected real keys
+via File > Settings, Verify & Save stored them in Credential Manager, live
+Positions render on Windows via REST).
+Next: Phase 3 (trading core) per docs/IMPLEMENTATION_PLAN.md.
 Last session: 2026-07-09
 
 ## Done
@@ -39,13 +41,19 @@ Last session: 2026-07-09
   XTZ/USD parses (split_pair fix confirmed live), demo risk pipeline end-to-end,
   GUI boots clean in demo mode.
 
+- 2026-07-09: Silent-crash fix (first-run/Settings dialogs ran before the
+  qasync loop started; PySide6 treats event-handler exceptions as fatal).
+  Dialogs now open inside the running loop; app.log crash logging added;
+  verify task survives dialog closure; process-wide shared NonceCounter.
+- 2026-07-09: 2.9 DONE - owner verified real keys in-app, live Positions render.
+
 ## Next
-- 2.9 owner step: launch app, File > Settings, paste real Kraken keys (read
-  permissions; add Create&Modify Orders when trading lands), Verify & Save,
-  confirm live Positions/Risk render.
 - Phase 3 (trading core): 3.1 limits.py -> 3.2 audit.py -> 3.3 PaperBroker ->
   3.4 REST order wrappers -> 3.5 OrderService -> 3.6-3.7 ticket/orders panels ->
-  3.8 gated $10 live-fire test.
+  3.8 gated live-fire test (max-order cap at $10, place far-from-market limit,
+  observe ack, cancel; owner at keyboard).
+- Note: owner's Kraken key needs Create & Modify Orders permission added
+  before 3.8 (read permissions suffice until then).
 
 ## Environment notes
 - Windows box: repo at C:\Users\mnc-9\crypto-quant-desk, venv at .venv (installed,
