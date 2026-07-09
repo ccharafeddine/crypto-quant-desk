@@ -1,20 +1,18 @@
-"""Demo data source: a baked sample book valued with REAL CLI market data.
+"""Demo data source: a baked sample book valued with REAL market data.
 
-DemoClient lets the app render a meaningful portfolio/risk cockpit with no Kraken
-keys. It is a drop-in for KrakenClient (same async surface) used by
+DemoClient lets the app render a meaningful portfolio/risk cockpit with no
+Kraken keys. It is a drop-in for the live clients (same async surface) used by
 compute_account_risk and the Positions panel.
 
-Hard rule preserved: all market data still comes from the Kraken CLI. DemoClient
-holds an internal real KrakenClient (no keys, public data only) and forwards
-get_marks / get_ohlc_closes to it unchanged. It never fabricates prices or
-candles. Only the holdings (balance) and the trade history are synthetic.
+Market data stays real: DemoClient holds an injected market client (the REST
+client by default - keyless, public endpoints only, works on Windows) and
+forwards get_marks / get_ohlc_closes to it unchanged. It never fabricates
+prices or candles. Only the holdings (balance) and trade history are synthetic.
 """
 
 from __future__ import annotations
 
 from typing import Any
-
-from cqd.data.exchange import KrakenClient
 
 # Baked sample book: bare-asset -> quantity, the same shape get_balance produces.
 # Quantities chosen so every asset is comfortably above the $1 dust threshold and
@@ -67,20 +65,30 @@ SAMPLE_TRADES: list[dict[str, Any]] = _build_trades()
 
 
 class DemoClient:
-    """KrakenClient-compatible client with synthetic holdings, real prices."""
+    """Live-client-compatible client with synthetic holdings, real prices."""
 
     is_demo = True
 
-    def __init__(self) -> None:
-        # Internal real CLI client, no keys: market data is public-only. Keys are
-        # never injected because get_marks/get_ohlc_closes are public calls.
-        self._client = KrakenClient()
+    def __init__(self, market_client: Any | None = None) -> None:
+        # Injected real market client, no keys: get_marks/get_ohlc_closes are
+        # public calls, so credentials are never involved. Default is the REST
+        # client (imported lazily to avoid a module cycle with client.py).
+        if market_client is None:
+            from cqd.data.rest import KrakenRESTClient
+
+            market_client = KrakenRESTClient(api_key="", api_secret="")
+        self._client = market_client
 
     async def __aenter__(self) -> "DemoClient":
+        enter = getattr(self._client, "__aenter__", None)
+        if enter is not None:
+            await enter()
         return self
 
     async def __aexit__(self, exc_type, exc, tb) -> None:
-        return None
+        exit_ = getattr(self._client, "__aexit__", None)
+        if exit_ is not None:
+            await exit_(exc_type, exc, tb)
 
     # ---------- synthetic account data ----------
 

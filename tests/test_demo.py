@@ -9,6 +9,7 @@ import pytest
 from cqd.data.client import make_client
 from cqd.data.demo import SAMPLE_BOOK, DemoClient
 from cqd.data.exchange import KrakenClient
+from cqd.data.rest import KrakenRESTClient
 from cqd.data.portfolio import AccountRisk, compute_account_risk
 from cqd.engine.risk import PortfolioRisk
 
@@ -126,6 +127,11 @@ def test_dropin_compute_account_risk() -> None:
 # ---------- factory ----------
 
 
+def _no_vault():
+    """Isolate factory tests from the real OS credential vault."""
+    return patch("cqd.data.credentials.get_kraken_keys", return_value=None)
+
+
 def test_make_client_demo_true() -> None:
     with patch.dict(os.environ, _FAKE_BIN, clear=False):
         c = make_client(demo=True)
@@ -133,11 +139,11 @@ def test_make_client_demo_true() -> None:
     assert c.is_demo is True
 
 
-def test_make_client_demo_false_is_live() -> None:
-    with patch.dict(os.environ, _FAKE_BIN, clear=False):
+def test_make_client_demo_false_is_rest() -> None:
+    # Forced live with no source configured: REST is the primary backend.
+    with patch.dict(os.environ, _FAKE_BIN, clear=True), _no_vault():
         c = make_client(demo=False)
-    assert isinstance(c, KrakenClient)
-    # Live client carries no is_demo attribute.
+    assert isinstance(c, KrakenRESTClient)
     assert getattr(c, "is_demo", False) is False
 
 
@@ -150,22 +156,38 @@ def test_make_client_env_demo() -> None:
 
 def test_make_client_auto_demo_when_no_keys() -> None:
     # No CQD_DATA_SOURCE and no keys -> auto-demo so a fresh launch shows data.
-    with patch.dict(os.environ, _FAKE_BIN, clear=True):
+    with patch.dict(os.environ, _FAKE_BIN, clear=True), _no_vault():
         c = make_client()
     assert isinstance(c, DemoClient)
 
 
-def test_make_client_auto_live_when_keys_present() -> None:
-    # No CQD_DATA_SOURCE but keys present -> live.
+def test_make_client_auto_rest_when_keys_present() -> None:
+    # No CQD_DATA_SOURCE but keys present -> live via REST.
     env = {**_FAKE_BIN, "KRAKEN_API_KEY": "k", "KRAKEN_API_SECRET": "s"}
     with patch.dict(os.environ, env, clear=True):
         c = make_client()
-    assert isinstance(c, KrakenClient)
+    assert isinstance(c, KrakenRESTClient)
 
 
-def test_make_client_explicit_live_overrides_missing_keys() -> None:
-    # CQD_DATA_SOURCE=live forces live even without keys (user sees auth error).
+def test_make_client_legacy_live_means_rest() -> None:
+    # CQD_DATA_SOURCE=live (contest-era value) forces REST even without keys
+    # (user sees an auth error pointing to Settings).
     env = {**_FAKE_BIN, "CQD_DATA_SOURCE": "live"}
+    with patch.dict(os.environ, env, clear=True), _no_vault():
+        c = make_client()
+    assert isinstance(c, KrakenRESTClient)
+
+
+def test_make_client_cli_source() -> None:
+    env = {**_FAKE_BIN, "CQD_DATA_SOURCE": "cli"}
     with patch.dict(os.environ, env, clear=True):
         c = make_client()
     assert isinstance(c, KrakenClient)
+
+
+def test_demo_market_client_is_injected() -> None:
+    class _FakeMarket:
+        pass
+
+    d = DemoClient(market_client=_FakeMarket())
+    assert isinstance(d._client, _FakeMarket)

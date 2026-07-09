@@ -144,7 +144,9 @@ class KrakenRESTClient:
                 api_key, api_secret = pair
         self._api_key = api_key or ""
         self._api_secret = api_secret or ""
-        self._nonce = nonce or NonceCounter(app_data_dir() / "nonce")
+        # Lazy: the nonce state file (and the app-data dir) is only needed for
+        # private calls; a public-only client must not touch the filesystem.
+        self._nonce = nonce
         self._limiter = _RateLimiter()
         self._http = httpx.AsyncClient(
             base_url=_BASE_URL,
@@ -199,6 +201,8 @@ class KrakenRESTClient:
                 "No Kraken API keys configured. Add them in File > Settings."
             )
         await self._limiter.acquire(cost)
+        if self._nonce is None:
+            self._nonce = NonceCounter(app_data_dir() / "nonce")
         path = f"/0/private/{endpoint}"
         nonce = str(self._nonce.next())
         payload = {"nonce": nonce, **(data or {})}
