@@ -58,25 +58,33 @@ class AnalystPanel(Panel):
         asyncio.ensure_future(self.load())
 
     async def load(self) -> None:
+        gen = self._begin_load()
         self.status.setText("Loading...")
         try:
             client = make_client()
             async with client as c:
                 ar = await compute_account_risk(c)
-                self.demo_badge.setVisible(getattr(c, "is_demo", False))
-                self._render(narrate_account_risk(ar))
+                is_demo = getattr(c, "is_demo", False)
+            if not self._is_current(gen):
+                return  # a newer load owns the UI now
+            self.demo_badge.setVisible(is_demo)
+            self._render(narrate_account_risk(ar))
             self.status.setText("Loaded")
         except EmptyPortfolioError:
-            self.status.setText("No priceable holdings to narrate.")
+            if self._is_current(gen):
+                self.status.setText("No priceable holdings to narrate.")
         except KrakenAuthError:
-            self.status.setText(
-                "Authentication failed. Check your Kraken keys, or set "
-                "CQD_DATA_SOURCE=demo to explore with sample data."
-            )
+            if self._is_current(gen):
+                self.status.setText(
+                    "Authentication failed. Check your Kraken keys, or set "
+                    "CQD_DATA_SOURCE=demo to explore with sample data."
+                )
         except KrakenCLIError as e:
-            self.status.setText(f"Kraken CLI error: {e}")
+            if self._is_current(gen):
+                self.status.setText(f"Kraken CLI error: {e}")
         except Exception as e:  # noqa: BLE001
-            self.status.setText(f"Error: {e}")
+            if self._is_current(gen):
+                self.status.setText(f"Error: {e}")
 
     def _render(self, narration) -> None:
         html = "".join(

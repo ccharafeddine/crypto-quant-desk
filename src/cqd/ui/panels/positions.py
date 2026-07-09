@@ -75,6 +75,7 @@ class PositionsPanel(Panel):
         asyncio.ensure_future(self.load())
 
     async def load(self) -> None:
+        gen = self._begin_load()
         self.status.setText("Loading...")
         try:
             client = make_client()
@@ -82,10 +83,13 @@ class PositionsPanel(Panel):
                 balances = await client.get_balance()
                 marks = await self._marks_for_balance(client, balances)
                 trades = await client.get_trades()
-                self._populate(balances, marks, trades)
+            if not self._is_current(gen):
+                return  # a newer load owns the UI now
+            self._populate(balances, marks, trades)
             self.status.setText("Loaded")
         except Exception as e:  # noqa: BLE001
-            self.status.setText(f"Error: {e}")
+            if self._is_current(gen):
+                self.status.setText(f"Error: {e}")
 
     async def _marks_for_balance(
         self, client: KrakenClient, balances: dict[str, float]
@@ -112,7 +116,12 @@ class PositionsPanel(Panel):
         self.table.setRowCount(len(rows))
         for i, (asset, qty) in enumerate(rows):
             symbol = f"{asset}/USD"
-            mark = float(marks.get(symbol) or 0.0)
+            # USD cash has no USD/USD market: its mark is 1.0 by definition, so
+            # the row shows real value instead of dashes (audit finding 8).
+            if asset == "USD":
+                mark = 1.0
+            else:
+                mark = float(marks.get(symbol) or 0.0)
             value = qty * mark if mark else 0.0
             avg_str, be_str = format_cost_basis(_safe_cost_basis(trades, asset))
 

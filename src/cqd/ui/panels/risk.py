@@ -52,6 +52,8 @@ def _is_nan(x) -> bool:
 
 
 def _pct(x: float, places: int = 1) -> str:
+    if x is None or _is_nan(x):
+        return "—"
     return f"{x * 100:.{places}f}%"
 
 
@@ -94,6 +96,18 @@ def build_risk_view(ar: AccountRisk, *, is_demo: bool) -> RiskView:
         min_usd = ar.info.get("min_usd", 1.0)
         caveats.append(
             f"Excluded (dust < ${min_usd:g}): " + ", ".join(map(str, dust))
+        )
+    dropped = ar.info.get("returns_dropped") or []
+    excluded = list(r.excluded_assets)
+    no_history = list(dict.fromkeys([*dropped, *excluded]))
+    if no_history:
+        caveats.append(
+            "Excluded from risk (no return history): " + ", ".join(map(str, no_history))
+        )
+    if r.frame_days and r.window_days < r.frame_days:
+        caveats.append(
+            f"Risk window shortened to {r.window_days} of {r.frame_days} days "
+            "by the newest holding's history."
         )
     if not caveats:
         caveats.append("All holdings priced.")
@@ -170,24 +184,32 @@ class RiskPanel(Panel):
         asyncio.ensure_future(self.load())
 
     async def load(self) -> None:
+        gen = self._begin_load()
         self.status.setText("Loading...")
         try:
             client = make_client()
             async with client as c:
                 ar = await compute_account_risk(c)
-                self._render(build_risk_view(ar, is_demo=getattr(c, "is_demo", False)))
+                is_demo = getattr(c, "is_demo", False)
+            if not self._is_current(gen):
+                return  # a newer load owns the UI now
+            self._render(build_risk_view(ar, is_demo=is_demo))
             self.status.setText("Loaded")
         except EmptyPortfolioError:
-            self.status.setText("No priceable holdings to compute risk.")
+            if self._is_current(gen):
+                self.status.setText("No priceable holdings to compute risk.")
         except KrakenAuthError:
-            self.status.setText(
-                "Authentication failed. Check your Kraken keys, or set "
-                "CQD_DATA_SOURCE=demo to explore with sample data."
-            )
+            if self._is_current(gen):
+                self.status.setText(
+                    "Authentication failed. Check your Kraken keys, or set "
+                    "CQD_DATA_SOURCE=demo to explore with sample data."
+                )
         except KrakenCLIError as e:
-            self.status.setText(f"Kraken CLI error: {e}")
+            if self._is_current(gen):
+                self.status.setText(f"Kraken CLI error: {e}")
         except Exception as e:  # noqa: BLE001
-            self.status.setText(f"Error: {e}")
+            if self._is_current(gen):
+                self.status.setText(f"Error: {e}")
 
     def _render(self, view: RiskView) -> None:
         self.value_label.setText(f"Total value: {view.total_usd_str}")

@@ -146,7 +146,13 @@ class MainWindow(QMainWindow):
             bar.showMessage("Ready")
 
     def _refresh_all(self) -> None:
-        for panel in (self.positions_panel, self.risk_panel, self.chart_panel):
+        panels = (
+            self.positions_panel,
+            self.risk_panel,
+            self.chart_panel,
+            self.analyst_panel,
+        )
+        for panel in panels:
             if hasattr(panel, "refresh"):
                 panel.refresh()
         self.statusBar().showMessage("Refreshed", 2000)

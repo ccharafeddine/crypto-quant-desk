@@ -122,6 +122,22 @@ def test_vol_regime_recent_hotter() -> None:
     assert "hotter" in body
 
 
+def test_all_nan_risk_contribution_does_not_crash() -> None:
+    # Regression (2026-07-09 audit): all-NaN risk contribution (short history ->
+    # NaN portfolio vol) made rc.idxmax() raise and blanked the Analyst panel.
+    nan = float("nan")
+    rc = pd.Series({"BTC": nan, "ETH": nan})
+    ar = _ar(
+        weights={"BTC": 0.5, "ETH": 0.5},
+        ann_vol=nan,
+        ewma_vol=nan,
+        risk_contribution=rc,
+    )
+    narration = narrate_account_risk(ar)  # must not raise
+    assert _section(narration, "Risk drivers") is None  # section skipped
+    assert "unavailable" in _section(narration, "Volatility")
+
+
 def test_caveats_present_when_unpriced_or_dust() -> None:
     ar = _ar(weights={"BTC": 1.0}, unpriced=["WEIRD"], dust={"SHIB": 0.5})
     body = _section(narrate_account_risk(ar), "Caveats")

@@ -129,7 +129,11 @@ def narrate_account_risk(ar: AccountRisk) -> Narration:
         )
 
     # --- Risk drivers ---
+    # dropna before idxmax: an all-NaN contribution series (short history ->
+    # NaN portfolio vol) used to raise and blank the whole panel.
     rc = r.risk_contribution
+    if rc is not None:
+        rc = rc.dropna()
     if rc is not None and len(rc) > 0:
         top_asset = rc.idxmax()
         top_rc = float(rc.loc[top_asset])

@@ -89,3 +89,27 @@ def test_footnote_states_conventions() -> None:
     assert "beta vs BTC" in view.footnote
     assert "0.94" in view.footnote
     assert "cash" in view.footnote.lower()
+
+
+def test_nan_vol_renders_dash_not_nan_percent() -> None:
+    # Regression (2026-07-09 audit): short-history portfolios rendered
+    # "Annualized vol: nan%".
+    ar = _stub_ar()
+    ar.risk.ann_vol = float("nan")
+    ar.risk.ewma_vol = float("nan")
+    view = build_risk_view(ar, is_demo=False)
+    m = dict(view.metrics)
+    assert m["Annualized vol"] == "—"
+    assert m["EWMA vol (λ=0.94)"] == "—"
+
+
+def test_shortened_window_and_exclusions_footnoted() -> None:
+    ar = _stub_ar()
+    ar.risk.window_days = 10
+    ar.risk.frame_days = 90
+    ar.risk.excluded_assets = ("NEWCOIN",)
+    ar.info["returns_dropped"] = ["DEADCOIN"]
+    view = build_risk_view(ar, is_demo=False)
+    joined = " | ".join(view.caveats)
+    assert "10 of 90 days" in joined
+    assert "DEADCOIN" in joined and "NEWCOIN" in joined
