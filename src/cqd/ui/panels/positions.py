@@ -31,10 +31,18 @@ def format_cost_basis(cb: CostBasisResult | None) -> tuple[str, str]:
     history (held via transfer-in, or none in the window), or its net position
     is fully closed. reconstruct_cost_basis returns a zero result (avg_cost=0)
     in those cases rather than None, so a non-positive avg_cost also maps to "-".
+
+    Basis is denominated in the trade's quote currency: USD renders as "$x",
+    anything else is labeled explicitly ("0.00012345 BTC"), never mislabeled USD.
     """
     if cb is None or cb.avg_cost is None or cb.avg_cost <= 0:
         return ("-", "-")
-    return (f"${cb.avg_cost:,.6f}", f"${cb.break_even_price:,.6f}")
+    if cb.quote == "USD":
+        return (f"${cb.avg_cost:,.6f}", f"${cb.break_even_price:,.6f}")
+    return (
+        f"{cb.avg_cost:,.8f} {cb.quote}",
+        f"{cb.break_even_price:,.8f} {cb.quote}",
+    )
 
 
 class PositionsPanel(Panel):

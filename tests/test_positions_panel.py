@@ -8,14 +8,30 @@ def test_format_cost_basis_with_values() -> None:
     cb = CostBasisResult(
         asset="BTC",
         quantity=0.5,
-        total_cost_usd=35000.0,
+        total_cost=35000.0,
         avg_cost=70000.0,
-        fees_paid_usd=56.0,
+        fees_paid=56.0,
     )
     avg, be = format_cost_basis(cb)
     assert avg == "$70,000.000000"
     # break_even_price == avg_cost by the engine's definition.
     assert be == "$70,000.000000"
+
+
+def test_format_cost_basis_non_usd_quote_is_labeled() -> None:
+    # BTC-quoted basis must render in BTC, never with a dollar sign.
+    cb = CostBasisResult(
+        asset="DOT",
+        quantity=10.0,
+        total_cost=0.001,
+        avg_cost=0.0001,
+        fees_paid=0.0,
+        quote="BTC",
+    )
+    avg, be = format_cost_basis(cb)
+    assert avg == "0.00010000 BTC"
+    assert be == avg
+    assert "$" not in avg
 
 
 def test_format_cost_basis_none_is_dash() -> None:
