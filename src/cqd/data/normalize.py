@@ -184,6 +184,58 @@ def normalize_balance(raw: dict[str, str]) -> dict[str, float]:
     return out
 
 
+def normalize_ledgers(raw: Any) -> list[dict[str, Any]]:
+    """Ledger response -> ascending list of engine-shaped ledger entries.
+
+    Input is {"ledger": {<lid>: {...}}, "count": N} (REST/CLI shape) or a bare
+    {<lid>: {...}} / list. Output per entry: refid, time (float unix), type,
+    subtype, asset (bare symbol, sub-balances folded), amount, fee, balance.
+    The equity-curve engine consumes this shape.
+    """
+    container: Any = raw
+    if isinstance(raw, dict) and "ledger" in raw:
+        container = raw["ledger"]
+    if isinstance(container, dict):
+        items = list(container.values())
+    elif isinstance(container, list):
+        items = container
+    else:
+        items = []
+
+    out: list[dict[str, Any]] = []
+    for e in items:
+        out.append(
+            {
+                "refid": str(e.get("refid", "")),
+                "time": float(e["time"]),
+                "type": str(e.get("type", "")),
+                "subtype": str(e.get("subtype", "")),
+                "asset": translate_asset(str(e["asset"])),
+                "amount": float(e["amount"]),
+                "fee": float(e.get("fee", 0.0) or 0.0),
+                "balance": float(e["balance"]) if e.get("balance") not in (None, "") else None,
+            }
+        )
+    out.sort(key=lambda x: x["time"])
+    return out
+
+
+def normalize_depth(raw: Any) -> dict[str, list[tuple[float, float]]]:
+    """Depth response -> {"bids": [(price, vol)], "asks": [(price, vol)]}.
+
+    Input is {<classic_pair>: {"asks": [[price, vol, ts], ...], "bids": ...}}.
+    Row order is preserved (Kraken returns best-first). Extra row fields
+    beyond price/volume are dropped.
+    """
+    for value in raw.values() if isinstance(raw, dict) else ():
+        if isinstance(value, dict) and "asks" in value and "bids" in value:
+            return {
+                "asks": [(float(r[0]), float(r[1])) for r in value["asks"]],
+                "bids": [(float(r[0]), float(r[1])) for r in value["bids"]],
+            }
+    return {"asks": [], "bids": []}
+
+
 def _iter_trade_objects(raw: Any) -> list[dict[str, Any]]:
     """Yield per-trade dicts from either container shape.
 
