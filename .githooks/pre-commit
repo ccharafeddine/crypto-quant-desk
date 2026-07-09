@@ -1,0 +1,15 @@
+#!/bin/sh
+# Lint + tests before every commit. Enable once per clone:
+#   git config core.hooksPath .githooks
+# Bypass in an emergency with --no-verify (CI will still catch it).
+
+PY=".venv/Scripts/python.exe"
+[ -x "$PY" ] || PY=".venv/bin/python"
+command -v "$PY" >/dev/null 2>&1 || PY=python
+
+echo "pre-commit: ruff check"
+"$PY" -m ruff check src tests || exit 1
+echo "pre-commit: ruff format --check"
+"$PY" -m ruff format --check src tests || exit 1
+echo "pre-commit: pytest"
+"$PY" -m pytest -q || exit 1

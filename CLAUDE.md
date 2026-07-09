@@ -33,12 +33,21 @@ PySide6 + qasync desktop app. Panels talk to services; services talk to Kraken. 
 
 ```
 pip install -e ".[dev]"     # setup
+git config core.hooksPath .githooks   # once per clone: pre-commit lint+tests
 python -m cqd               # run
 pytest -q                   # tests (must pass before any commit)
 ruff check src tests        # lint
 ruff format src tests       # format
 # packaging: PyInstaller + Inno Setup, see packaging/windows/ (Phase 7)
 ```
+
+## Testing discipline
+
+Every behavior change ships with tests in the same commit; new modules get a
+test file from the start. The pre-commit hook (.githooks) runs ruff + pytest
+locally; GitHub Actions (.github/workflows/ci.yml) runs the same gate on every
+push. Never merge or push over a red CI; never skip the hook except for a
+genuine emergency (--no-verify), and fix the breakage in the next commit.
 
 ## Style
 
