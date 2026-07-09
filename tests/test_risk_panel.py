@@ -88,7 +88,9 @@ def test_footnote_states_conventions() -> None:
     assert "365" in view.footnote
     assert "beta vs BTC" in view.footnote
     assert "0.94" in view.footnote
-    assert "cash" in view.footnote.lower()
+    # Cash convention: only USD-pegged assets are zero-vol; fiat floats.
+    assert "USD-pegged" in view.footnote
+    assert "non-USD fiat" in view.footnote
 
 
 def test_nan_vol_renders_dash_not_nan_percent() -> None:

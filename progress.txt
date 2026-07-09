@@ -1,27 +1,38 @@
 # progress.txt — crypto-quant-desk v2 overhaul
 
-Status: Phase 0 — In progress
+Status: Phase 1 — COMPLETE. Next: Phase 2 (Windows foundation).
 Last session: 2026-07-09
 
 ## Done
 - 2026-07-09: Overhaul interrogation + brief (contest entry -> personal Windows trading dashboard).
-- 2026-07-09: Security audit of tree + full git history. No secrets, no real account data,
-  demo/test fixtures synthetic. ONE finding: docs/PROJECT_INSTRUCTIONS.md exposed private
-  prop-engine plans since the first commit; file removed from index (step 0.1). History
-  purge decision (step 0.4) still with owner.
-- 2026-07-09: Logic audit (12 findings, 3 HIGH) -> encoded as Phase 1 of IMPLEMENTATION_PLAN
-  and BACKEND_STRUCTURE "Known defects".
-- 2026-07-09: Six canonical docs generated in docs/ (PRD, APP_FLOW, TECH_STACK,
-  FRONTEND_GUIDELINES, BACKEND_STRUCTURE, IMPLEMENTATION_PLAN). CLAUDE.md rewritten.
-  progress.txt + docs/lessons.md created.
+- 2026-07-09: Security audit of tree + full git history. One finding
+  (docs/PROJECT_INSTRUCTIONS.md leaked private prop-engine plans); file removed.
+- 2026-07-09: Logic audit (12 findings, 3 HIGH) -> Phase 1 of IMPLEMENTATION_PLAN.
+- 2026-07-09: Six canonical docs in docs/; CLAUDE.md + README rewritten.
+- 2026-07-09: Phase 0 complete. Debranded ($DOG theme -> Amber, default Slate accent
+  #5B8CFF, Windows font stacks, demo book DOG -> ADA). HISTORY PURGED: fresh root
+  commit 2bdeed3 force-pushed to origin/main (old history contents assumed disclosed).
+- 2026-07-09: Phase 1 complete, one commit per finding, 130 tests green, ruff clean:
+  1.1 split_pair classic-suffix guard (XTZ/REZ) 1.2 cost-basis rework (per-quote true
+  avg cost, realized PnL, oversold flag, quote-labeled UI) 1.3 per-pair/per-asset
+  degradation (get_marks retry, returns attrs["dropped_assets"]) 1.4 common-history
+  risk window (window_days/frame_days/excluded_assets on PortfolioRisk) 1.5 CLI
+  timeout 30s + strict JSON (KrakenTimeoutError/KrakenProtocolError) 1.6 UI fixes
+  (USD cash row, refresh-all incl. analyst, per-panel load generation guard, NaN
+  guards, window caveats) 1.7 non-USD fiat floats (cash = USD/USDT/USDC/DAI only).
 
-## Next
-- Owner reviews the six docs (open judgment calls: default theme = Slate w/ orange renamed
-  Amber; winotify for toasts; max-order default $500; demo book DOG -> ADA swap).
-- Step 0.2: README rewrite (docs step done via canonical docs; README still contest-era).
-- Step 0.4: owner decides git-history purge (PROJECT_INSTRUCTIONS.md was public since
-  first commit; assume disclosed either way).
-- Then Phase 1 (audit-finding fixes), per docs/IMPLEMENTATION_PLAN.md.
+## Next (Phase 2 per docs/IMPLEMENTATION_PLAN.md)
+- 2.1 data/credentials.py (keyring, service "cqd")
+- 2.2 data/rest.py signing core (verify against docs.kraken.com signature example)
+- 2.3-2.5 REST wrappers + client factory (auto|rest|cli|demo)
+- 2.6-2.7 Settings + first-run dialogs
+- 2.8 font/cache relocation  2.9 milestone check with real account
+
+## Environment notes
+- Windows box: repo at C:\Users\mnc-9\crypto-quant-desk, venv at .venv (installed,
+  pytest/ruff work). Run: .venv\Scripts\python.exe -m pytest -q
+- kraken CLI: NO Windows binary exists (v0.3.2, macOS/Linux only) -> REST-primary design.
+- PowerShell gotcha: double quotes inside git commit -m break arg quoting; use -F file.
 
 ## Environment notes
 - Windows box: repo at C:\Users\mnc-9\crypto-quant-desk. Package not yet pip-installed here;

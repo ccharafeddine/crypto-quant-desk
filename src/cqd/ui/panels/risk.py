@@ -31,7 +31,8 @@ from cqd.ui.widgets import Badge, PanelHeader
 
 _FOOTNOTE = (
     "Annualized over 365 days · simple returns · beta vs BTC · "
-    "EWMA vol uses lambda 0.94 · cash/quote assets contribute zero vol and beta."
+    "EWMA vol uses lambda 0.94 · USD and USD-pegged stables contribute zero "
+    "vol and beta; non-USD fiat floats like any other asset."
 )
 
 

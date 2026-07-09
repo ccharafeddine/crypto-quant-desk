@@ -172,6 +172,21 @@ def test_stablecoin_treated_as_cash() -> None:
     assert "USDCUSD" not in client.requested
 
 
+def test_non_usd_fiat_is_a_floating_asset() -> None:
+    # Regression (2026-07-09 audit): EUR/GBP/JPY were pinned as zero-vol cash
+    # while being VALUED at a live floating mark. In a USD book, non-USD fiat
+    # must carry a real return series.
+    data = {
+        "BTC": [(D1, 100.0), (D2, 110.0), (D3, 121.0)],
+        "EUR": [(D1, 1.08), (D2, 1.10), (D3, 1.07)],
+    }
+    client = _GuardedStubClient(data)
+    r = asyncio.run(build_returns_frame(client, ["BTC", "EUR"]))
+    assert "EURUSD" in client.requested  # fetched, not pinned to 1.0
+    assert not (r["EUR"] == 0.0).all()
+    assert r["EUR"].iloc[0] == pytest.approx(1.10 / 1.08 - 1.0)
+
+
 def test_quote_param_respected() -> None:
     # With quote="EUR", the friendly pair is bare+"EUR" and EUR is cash.
     data = {"BTC": [(D1, 100.0), (D2, 110.0), (D3, 121.0)]}

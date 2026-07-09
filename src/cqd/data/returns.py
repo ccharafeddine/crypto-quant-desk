@@ -32,15 +32,15 @@ from typing import Protocol
 
 import pandas as pd
 
-from cqd.data.normalize import _QUOTE_SUFFIXES, translate_asset
-
-# Bare engine symbols treated as cash (no own market). Derived from the
-# normalizer's known quote/fiat/stable suffixes so the two stay in sync; e.g.
-# ZUSD/USD -> USD, ZEUR/EUR -> EUR, USDT, USDC, DAI. A stablecoin that DOES have
-# a USD market (USDC/USD) is still treated as cash: simpler and correct, since a
-# stable held as cash carries ~zero risk and its tiny deviations from $1 are
-# negligible for portfolio vol/beta.
-_CASH_SYMBOLS: frozenset[str] = frozenset(translate_asset(q) for q in _QUOTE_SUFFIXES)
+# Bare engine symbols treated as cash (no own market): USD and USD-pegged
+# stables only. A stablecoin that DOES have a USD market (USDC/USD) is still
+# treated as cash: its deviations from $1 are negligible for portfolio vol.
+# Non-USD fiat (EUR, GBP, JPY) is deliberately NOT here (2026-07-09 audit): in
+# a USD-denominated book it floats several percent annualized against USD while
+# being valued at a live mark, so it gets a real {sym}{quote} return series
+# like any other asset (and degrades to a dropped-asset caveat if the CLI has
+# no such pair). The portfolio quote itself is always cash via _is_cash.
+_CASH_SYMBOLS: frozenset[str] = frozenset({"USD", "USDT", "USDC", "DAI"})
 
 
 def _is_cash(symbol: str, quote: str) -> bool:
