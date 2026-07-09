@@ -11,6 +11,7 @@ only, never into argv (argv is world-readable via `ps`) and never logged.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import os
 import shutil
@@ -37,6 +38,18 @@ class KrakenCLINotFound(KrakenCLIError):
     """The kraken binary could not be located."""
 
 
+class KrakenTimeoutError(KrakenCLIError):
+    """The CLI did not respond within the timeout (hung network/process)."""
+
+
+class KrakenProtocolError(KrakenCLIError):
+    """The CLI exited 0 but its output was not valid JSON (truncated stdout).
+
+    Raised instead of returning None-as-data: a truncated trade history would
+    otherwise silently render as "no trades" (audit finding 7).
+    """
+
+
 class KrakenClient:
     """Async wrapper that shells out to the bundled `kraken` CLI.
 
@@ -44,9 +57,18 @@ class KrakenClient:
     context-manager hooks are no-ops kept only for call-site compatibility.
     """
 
-    def __init__(self, api_key: str | None = None, api_secret: str | None = None) -> None:
+    #: Hard per-call ceiling; a hung CLI must never wedge a panel forever.
+    DEFAULT_TIMEOUT_S = 30.0
+
+    def __init__(
+        self,
+        api_key: str | None = None,
+        api_secret: str | None = None,
+        timeout: float = DEFAULT_TIMEOUT_S,
+    ) -> None:
         self._api_key = api_key or os.environ.get("KRAKEN_API_KEY", "")
         self._api_secret = api_secret or os.environ.get("KRAKEN_API_SECRET", "")
+        self._timeout = timeout
         self._binary = self._resolve_binary()
 
     async def __aenter__(self) -> "KrakenClient":
@@ -97,14 +119,24 @@ class KrakenClient:
             stderr=asyncio.subprocess.PIPE,
             env=env,
         )
-        stdout, stderr = await proc.communicate()
+        try:
+            stdout, stderr = await asyncio.wait_for(
+                proc.communicate(), timeout=self._timeout
+            )
+        except asyncio.TimeoutError:
+            with contextlib.suppress(ProcessLookupError):
+                proc.kill()
+            raise KrakenTimeoutError(
+                f"kraken '{args[0]}' timed out after {self._timeout:.0f}s"
+            ) from None
 
         body: Any = None
+        decode_failed = False
         if stdout:
             try:
                 body = json.loads(stdout)
             except json.JSONDecodeError:
-                body = None
+                decode_failed = True
 
         # Surface CLI-reported errors (which arrive with returncode 1 and an
         # {"error": ...} JSON body) before trusting the payload.
@@ -119,6 +151,13 @@ class KrakenClient:
             detail = stderr.decode("utf-8", "replace").strip() if stderr else ""
             raise KrakenCLIError(
                 f"kraken exited {proc.returncode}: {detail or 'no stderr'}"
+            )
+
+        # Exit 0 must still produce a JSON body; truncated or empty stdout is a
+        # protocol failure, never data (None used to normalize to "no trades").
+        if decode_failed or body is None:
+            raise KrakenProtocolError(
+                f"kraken '{args[0]}' exited 0 with invalid or empty JSON output"
             )
 
         return body

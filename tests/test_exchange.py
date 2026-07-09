@@ -15,6 +15,8 @@ from cqd.data.exchange import (
     KrakenAuthError,
     KrakenCLINotFound,
     KrakenClient,
+    KrakenProtocolError,
+    KrakenTimeoutError,
 )
 
 # Verified public-data literals (kraken 0.3.2).
@@ -172,6 +174,56 @@ def test_auth_failure_raises() -> None:
     p, _ = _patch_subprocess(AUTH_ERROR_JSON, returncode=1)
     with p, pytest.raises(KrakenAuthError):
         asyncio.run(_client().get_balance())
+
+
+def test_exit_zero_invalid_json_raises_protocol_error() -> None:
+    # Regression (2026-07-09 audit): truncated stdout with exit 0 used to
+    # normalize to None and silently render as "no trades".
+    fake = _FakeProc(b'{"trades": {"TX', b"", 0)  # truncated JSON
+
+    async def _fake_exec(*args, **kwargs):
+        return fake
+
+    with (
+        patch("asyncio.create_subprocess_exec", side_effect=_fake_exec),
+        pytest.raises(KrakenProtocolError),
+    ):
+        asyncio.run(_client().get_trades())
+
+
+def test_exit_zero_empty_stdout_raises_protocol_error() -> None:
+    fake = _FakeProc(b"", b"", 0)
+
+    async def _fake_exec(*args, **kwargs):
+        return fake
+
+    with (
+        patch("asyncio.create_subprocess_exec", side_effect=_fake_exec),
+        pytest.raises(KrakenProtocolError),
+    ):
+        asyncio.run(_client().get_balance())
+
+
+def test_hung_cli_times_out() -> None:
+    # Regression (2026-07-09 audit): no timeout meant a hung CLI wedged every
+    # panel on "Loading..." forever.
+    class _HungProc:
+        returncode = None
+
+        async def communicate(self):
+            await asyncio.sleep(3600)
+
+        def kill(self):
+            self.killed = True
+
+    async def _fake_exec(*args, **kwargs):
+        return _HungProc()
+
+    with patch("asyncio.create_subprocess_exec", side_effect=_fake_exec):
+        with patch.dict("os.environ", {"CQD_KRAKEN_BIN": "/fake/kraken"}, clear=False):
+            client = KrakenClient(timeout=0.05)
+        with pytest.raises(KrakenTimeoutError):
+            asyncio.run(client.get_balance())
 
 
 def test_binary_missing_raises() -> None:
