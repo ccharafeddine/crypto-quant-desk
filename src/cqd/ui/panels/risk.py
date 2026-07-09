@@ -188,9 +188,11 @@ class RiskPanel(Panel):
         gen = self._begin_load()
         self.status.setText("Loading...")
         try:
+            from cqd.ui.settings_store import get_dust_threshold_usd
+
             client = make_client()
             async with client as c:
-                ar = await compute_account_risk(c)
+                ar = await compute_account_risk(c, min_usd=get_dust_threshold_usd())
                 is_demo = getattr(c, "is_demo", False)
             if not self._is_current(gen):
                 return  # a newer load owns the UI now

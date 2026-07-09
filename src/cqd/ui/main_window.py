@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QActionGroup
 from PySide6.QtWidgets import (
@@ -16,7 +18,11 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from cqd.data import credentials
 from cqd.data.client import resolve_demo
+from cqd.ui import settings_store as store
+from cqd.ui.dialogs.first_run import CHOICE_CONNECT, FirstRunDialog
+from cqd.ui.dialogs.settings import SettingsDialog
 from cqd.ui.panels.analyst import AnalystPanel
 from cqd.ui.panels.chart import ChartPanel
 from cqd.ui.panels.positions import PositionsPanel
@@ -61,7 +67,8 @@ class MainWindow(QMainWindow):
         app_title = QLabel("Crypto Quant Desk")
         app_title.setProperty("role", "app-title")
         lay.addWidget(app_title)
-        lay.addWidget(Badge("DEMO" if self._is_demo else "LIVE"))
+        self._mode_badge = Badge("DEMO" if self._is_demo else "LIVE")
+        lay.addWidget(self._mode_badge)
         lay.addStretch(1)
         bar.addWidget(container)
         self.addToolBar(Qt.ToolBarArea.TopToolBarArea, bar)
@@ -100,6 +107,10 @@ class MainWindow(QMainWindow):
         refresh_action.setShortcut("F5")
         refresh_action.triggered.connect(self._refresh_all)
         file_menu.addAction(refresh_action)
+        settings_action = QAction("Settings...", self)
+        settings_action.setShortcut("Ctrl+,")
+        settings_action.triggered.connect(self._open_settings)
+        file_menu.addAction(settings_action)
         file_menu.addSeparator()
         quit_action = QAction("Quit", self)
         quit_action.setShortcut("Ctrl+Q")
@@ -137,13 +148,48 @@ class MainWindow(QMainWindow):
     def _build_status_bar(self) -> None:
         bar = QStatusBar(self)
         self.setStatusBar(bar)
+        self._update_status_message()
+
+    def _update_status_message(self) -> None:
         if self._is_demo:
-            bar.showMessage(
-                "Demo data (sample portfolio) - add your Kraken API keys to a "
-                ".env file to see your live account."
+            self.statusBar().showMessage(
+                "Demo data (sample portfolio) - connect your Kraken account in "
+                "File > Settings to see your live account."
             )
         else:
-            bar.showMessage("Ready")
+            self.statusBar().showMessage("Ready")
+
+    # ---------- settings + first run ----------
+
+    def _open_settings(self) -> None:
+        dialog = SettingsDialog(self)
+        dialog.settings_changed.connect(self._on_settings_changed)
+        dialog.exec()
+
+    def _on_settings_changed(self) -> None:
+        self._is_demo = resolve_demo()
+        self.setWindowTitle(
+            "Crypto Quant Desk (Demo data)" if self._is_demo else "Crypto Quant Desk"
+        )
+        self._mode_badge.setText("DEMO" if self._is_demo else "LIVE")
+        self._update_status_message()
+        self._refresh_all()
+
+    def maybe_show_first_run(self) -> None:
+        """Fresh install (no keys, no prior choice): offer connect vs demo."""
+        if os.environ.get("CQD_DATA_SOURCE"):
+            return  # explicit source override (dev/CI): never nag
+        if store.is_first_run_done():
+            return
+        if credentials.kraken_keys_present():
+            store.mark_first_run_done()
+            return
+        dialog = FirstRunDialog(self)
+        dialog.exec()
+        if dialog.choice == CHOICE_CONNECT:
+            self._open_settings()
+        store.mark_first_run_done()
+        self._on_settings_changed()
 
     def _refresh_all(self) -> None:
         panels = (

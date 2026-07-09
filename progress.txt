@@ -1,6 +1,7 @@
 # progress.txt — crypto-quant-desk v2 overhaul
 
-Status: Phase 1 — COMPLETE. Next: Phase 2 (Windows foundation).
+Status: Phase 2 — code complete; step 2.9 keyed-account check awaits owner.
+Next: owner connects real keys via File > Settings, then Phase 3 (trading core).
 Last session: 2026-07-09
 
 ## Done
@@ -21,12 +22,30 @@ Last session: 2026-07-09
   (USD cash row, refresh-all incl. analyst, per-panel load generation guard, NaN
   guards, window caveats) 1.7 non-USD fiat floats (cash = USD/USDT/USDC/DAI only).
 
-## Next (Phase 2 per docs/IMPLEMENTATION_PLAN.md)
-- 2.1 data/credentials.py (keyring, service "cqd")
-- 2.2 data/rest.py signing core (verify against docs.kraken.com signature example)
-- 2.3-2.5 REST wrappers + client factory (auto|rest|cli|demo)
-- 2.6-2.7 Settings + first-run dialogs
-- 2.8 font/cache relocation  2.9 milestone check with real account
+- 2026-07-09: Phase 2 built and verified (156 tests green, ruff clean):
+  errors.py shared taxonomy (REST+CLI, error_from_api mapper) · credentials.py
+  (keyring vault service "cqd", env fallback, only module touching keys) ·
+  rest.py KrakenRESTClient (signing verified vs Kraken's documented test vector
+  incl. prepend-nonce quirk; persisted nonce; token-bucket limiter; 15s
+  timeouts; Ticker/OHLC/Depth/AssetPairs/Time + Balance/TradesHistory/Ledgers/
+  OpenOrders/GetWebSocketsToken; per-pair degradation on API errors only) ·
+  normalize.py ledgers+depth · client.py factory auto|rest|cli|demo (REST
+  primary; "live" legacy alias; DemoClient market data rides keyless REST so
+  demo works on Windows) · paths.py + cache under %LOCALAPPDATA%\CryptoQuantDesk ·
+  settings_store.py (typed QSettings) · Settings dialog (verify-then-save keys
+  to vault, paper default, max order, source, dust) · first-run dialog ·
+  main_window/app wiring (mode badge updates live).
+  LIVE SMOKE PASSED on this machine: real api.kraken.com marks/OHLC/depth,
+  XTZ/USD parses (split_pair fix confirmed live), demo risk pipeline end-to-end,
+  GUI boots clean in demo mode.
+
+## Next
+- 2.9 owner step: launch app, File > Settings, paste real Kraken keys (read
+  permissions; add Create&Modify Orders when trading lands), Verify & Save,
+  confirm live Positions/Risk render.
+- Phase 3 (trading core): 3.1 limits.py -> 3.2 audit.py -> 3.3 PaperBroker ->
+  3.4 REST order wrappers -> 3.5 OrderService -> 3.6-3.7 ticket/orders panels ->
+  3.8 gated $10 live-fire test.
 
 ## Environment notes
 - Windows box: repo at C:\Users\mnc-9\crypto-quant-desk, venv at .venv (installed,
