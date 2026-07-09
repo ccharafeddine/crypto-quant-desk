@@ -1,0 +1,20 @@
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+.env
+.env.*
+!.env.example
+.cache/
+dist/
+build/
+*.dmg
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.DS_Store
+*.spec
+# Keep the committed PyInstaller spec (reproducible build) despite *.spec above.
+!packaging/crypto-quant-desk.spec
+~/.cqd/

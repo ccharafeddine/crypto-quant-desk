@@ -1,0 +1,30 @@
+# progress.txt — crypto-quant-desk v2 overhaul
+
+Status: Phase 0 — In progress
+Last session: 2026-07-09
+
+## Done
+- 2026-07-09: Overhaul interrogation + brief (contest entry -> personal Windows trading dashboard).
+- 2026-07-09: Security audit of tree + full git history. No secrets, no real account data,
+  demo/test fixtures synthetic. ONE finding: docs/PROJECT_INSTRUCTIONS.md exposed private
+  prop-engine plans since the first commit; file removed from index (step 0.1). History
+  purge decision (step 0.4) still with owner.
+- 2026-07-09: Logic audit (12 findings, 3 HIGH) -> encoded as Phase 1 of IMPLEMENTATION_PLAN
+  and BACKEND_STRUCTURE "Known defects".
+- 2026-07-09: Six canonical docs generated in docs/ (PRD, APP_FLOW, TECH_STACK,
+  FRONTEND_GUIDELINES, BACKEND_STRUCTURE, IMPLEMENTATION_PLAN). CLAUDE.md rewritten.
+  progress.txt + docs/lessons.md created.
+
+## Next
+- Owner reviews the six docs (open judgment calls: default theme = Slate w/ orange renamed
+  Amber; winotify for toasts; max-order default $500; demo book DOG -> ADA swap).
+- Step 0.2: README rewrite (docs step done via canonical docs; README still contest-era).
+- Step 0.4: owner decides git-history purge (PROJECT_INSTRUCTIONS.md was public since
+  first commit; assume disclosed either way).
+- Then Phase 1 (audit-finding fixes), per docs/IMPLEMENTATION_PLAN.md.
+
+## Environment notes
+- Windows box: repo at C:\Users\mnc-9\crypto-quant-desk. Package not yet pip-installed here;
+  tests need `pip install -e ".[dev]"` (PySide6 missing locally; 93 non-UI tests pass with
+  PYTHONPATH=src on system Python).
+- kraken CLI: NO Windows binary exists (v0.3.2, macOS/Linux only) -> REST-primary design.

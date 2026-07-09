@@ -1,0 +1,167 @@
+QMainWindow,
+QWidget {
+    background-color: #0E0F12;
+    color: #E6E8EB;
+    /* No custom family: inherit the native system UI font (San Francisco on
+       macOS). Naming an uninstalled font ("Inter") forced an ugly fallback and
+       a slow font-alias warning at startup. */
+    font-size: 13px;
+}
+
+QMenuBar {
+    background-color: #15171C;
+    border-bottom: 1px solid #2A2E36;
+    padding: 4px;
+}
+QMenuBar::item {
+    background: transparent;
+    padding: 4px 10px;
+    border-radius: 4px;
+}
+QMenuBar::item:selected {
+    background: #22262F;
+}
+
+QMenu {
+    background-color: #15171C;
+    border: 1px solid #2A2E36;
+    padding: 4px;
+}
+QMenu::item {
+    padding: 6px 16px;
+    border-radius: 4px;
+}
+QMenu::item:selected {
+    background: #22262F;
+}
+
+QDockWidget {
+    color: #9AA0A8;
+}
+QDockWidget::title {
+    background: #15171C;
+    border-bottom: 1px solid #2A2E36;
+    padding: 8px 12px;
+    text-align: left;
+    font-weight: 600;
+}
+
+QStatusBar {
+    background: #15171C;
+    border-top: 1px solid #2A2E36;
+    color: #9AA0A8;
+}
+
+QTableWidget,
+QTableView {
+    background-color: #0E0F12;
+    alternate-background-color: #15171C;
+    gridline-color: #2A2E36;
+    selection-background-color: #22262F;
+    selection-color: #E6E8EB;
+    border: none;
+    font-family: "Menlo", "SF Mono", "Monaco", monospace;
+}
+QTableWidget::item,
+QTableView::item {
+    padding: 7px 10px;  /* row breathing room */
+}
+QHeaderView::section {
+    background-color: #15171C;
+    color: #9AA0A8;
+    border: none;
+    border-right: 1px solid #2A2E36;
+    border-bottom: 1px solid #2A2E36;
+    padding: 9px 10px;
+    font-weight: 600;
+}
+
+QPushButton {
+    background-color: #22262F;
+    color: #E6E8EB;
+    border: 1px solid #3A3F49;
+    border-radius: 4px;
+    padding: 6px 12px;
+}
+QPushButton:hover {
+    background-color: #2A2E36;
+}
+QPushButton:pressed {
+    background-color: #1B1E25;
+}
+
+QLineEdit,
+QTextEdit,
+QPlainTextEdit {
+    background-color: #15171C;
+    color: #E6E8EB;
+    border: 1px solid #2A2E36;
+    border-radius: 4px;
+    padding: 6px;
+    font-family: "Menlo", "SF Mono", "Monaco", monospace;
+}
+QLineEdit:focus,
+QTextEdit:focus,
+QPlainTextEdit:focus {
+    border-color: #5B8CFF;
+}
+
+QScrollBar:vertical {
+    background: transparent;
+    width: 10px;
+}
+QScrollBar::handle:vertical {
+    background: #2A2E36;
+    border-radius: 5px;
+    min-height: 20px;
+}
+QScrollBar::handle:vertical:hover {
+    background: #3A3F49;
+}
+QScrollBar::add-line:vertical,
+QScrollBar::sub-line:vertical {
+    height: 0;
+}
+QScrollBar:horizontal {
+    background: transparent;
+    height: 10px;
+}
+QScrollBar::handle:horizontal {
+    background: #2A2E36;
+    border-radius: 5px;
+    min-width: 20px;
+}
+
+QLabel[role="title"] {
+    font-size: 16px;
+    font-weight: 600;
+    color: #F2F4F7;
+    padding-bottom: 2px;
+}
+QLabel[role="subtitle"] {
+    font-size: 12px;
+    color: #9AA0A8;
+}
+QLabel[role="badge"] {
+    background-color: #243B6B;
+    color: #BFD0FF;
+    border: 1px solid #3A5BA8;
+    border-radius: 4px;
+    padding: 3px 8px;
+    font-size: 11px;
+    font-weight: 600;
+}
+QLabel[role="footnote"] {
+    font-size: 11px;
+    color: #6B7079;
+}
+QLabel[role="metric-value"] {
+    font-size: 22px;
+    font-weight: 500;
+    color: #E6E8EB;
+    font-family: "Menlo", "SF Mono", "Monaco", monospace;
+}
+QLabel[role="metric-label"] {
+    font-size: 11px;
+    color: #6B7079;
+}

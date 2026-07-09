@@ -1,0 +1,26 @@
+"""Color tokens for the dark theme."""
+
+# Backgrounds
+BG_PRIMARY = "#0E0F12"
+BG_SECONDARY = "#15171C"
+BG_TERTIARY = "#1B1E25"
+BG_ELEVATED = "#22262F"
+
+# Text
+TEXT_PRIMARY = "#E6E8EB"
+TEXT_SECONDARY = "#9AA0A8"
+TEXT_MUTED = "#6B7079"
+
+# Accents
+ACCENT = "#5B8CFF"
+ACCENT_DIM = "#3F66B8"
+
+# PnL
+GREEN = "#1BC47D"
+GREEN_DIM = "#0E7A4C"
+RED = "#E14C5C"
+RED_DIM = "#8C2F39"
+
+# Borders
+BORDER = "#2A2E36"
+BORDER_STRONG = "#3A3F49"
