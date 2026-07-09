@@ -9,10 +9,11 @@ from __future__ import annotations
 
 import asyncio
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QHeaderView,
     QLabel,
+    QMenu,
     QTableWidget,
     QTableWidgetItem,
 )
@@ -50,8 +51,12 @@ class PositionsPanel(Panel):
 
     HEADERS = ["Asset", "Quantity", "Mark", "Value (USD)", "Avg cost", "Break-even"]
 
+    #: Emitted from the row context menu; the ticket pre-fills a market sell.
+    close_requested = Signal(str, float)  # asset, quantity
+
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
+        self._row_data: list[tuple[str, float]] = []
 
         self._layout.addWidget(PanelHeader("Positions"))
 
@@ -63,6 +68,8 @@ class PositionsPanel(Panel):
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table.setShowGrid(False)
         self.table.setAlternatingRowColors(False)
+        self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.table.customContextMenuRequested.connect(self._on_context_menu)
         self._layout.addWidget(self.table)
 
         self.status = QLabel("Not loaded")
@@ -108,6 +115,7 @@ class PositionsPanel(Panel):
     ) -> None:
         rows = [(a, q) for a, q in balances.items() if q and q > 0]
         rows.sort(key=lambda r: r[0])
+        self._row_data = rows
 
         # Clear stale items before resizing so no orphaned cells linger.
         self.table.clearContents()
@@ -129,6 +137,18 @@ class PositionsPanel(Panel):
             self.table.setItem(i, 3, _cell(f"${value:,.2f}" if mark else "-"))
             self.table.setItem(i, 4, _cell(avg_str))
             self.table.setItem(i, 5, _cell(be_str))
+
+    def _on_context_menu(self, pos) -> None:
+        row = self.table.rowAt(pos.y())
+        if row < 0 or row >= len(self._row_data):
+            return
+        asset, qty = self._row_data[row]
+        if asset == "USD":
+            return  # cash has nothing to close
+        menu = QMenu(self)
+        action = menu.addAction(f"Close {asset} position (pre-fill sell {qty:g})...")
+        if menu.exec(self.table.viewport().mapToGlobal(pos)) is action:
+            self.close_requested.emit(asset, float(qty))
 
     def refresh(self) -> None:
         asyncio.ensure_future(self.load())

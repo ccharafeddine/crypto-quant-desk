@@ -10,9 +10,11 @@ from PySide6.QtWidgets import (
     QApplication,
     QDockWidget,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QMainWindow,
     QMenu,
+    QMessageBox,
     QStatusBar,
     QToolBar,
     QWidget,
@@ -20,13 +22,16 @@ from PySide6.QtWidgets import (
 
 from cqd.data import credentials
 from cqd.data.client import resolve_demo
+from cqd.ui import services
 from cqd.ui import settings_store as store
 from cqd.ui.dialogs.first_run import CHOICE_CONNECT, FirstRunDialog
 from cqd.ui.dialogs.settings import SettingsDialog
 from cqd.ui.panels.analyst import AnalystPanel
 from cqd.ui.panels.chart import ChartPanel
+from cqd.ui.panels.orders import OrdersPanel
 from cqd.ui.panels.positions import PositionsPanel
 from cqd.ui.panels.risk import RiskPanel
+from cqd.ui.panels.ticket import TicketPanel
 from cqd.ui.theme import THEMES, build_qss, get_theme, load_theme_name, save_theme_name
 from cqd.ui.widgets import Badge
 
@@ -78,11 +83,20 @@ class MainWindow(QMainWindow):
         self.risk_panel = RiskPanel(self)
         self.chart_panel = ChartPanel(self)
         self.analyst_panel = AnalystPanel(self)
+        self.ticket_panel = TicketPanel(self)
+        self.orders_panel = OrdersPanel(self)
 
         self._add_dock(self.positions_panel, "Positions", Qt.DockWidgetArea.LeftDockWidgetArea)
         self._add_dock(self.risk_panel, "Risk", Qt.DockWidgetArea.RightDockWidgetArea)
         self._add_dock(self.chart_panel, "Chart", Qt.DockWidgetArea.RightDockWidgetArea)
+        self._add_dock(self.ticket_panel, "Ticket", Qt.DockWidgetArea.RightDockWidgetArea)
         self._add_dock(self.analyst_panel, "Analyst", Qt.DockWidgetArea.BottomDockWidgetArea)
+        self._add_dock(self.orders_panel, "Orders", Qt.DockWidgetArea.BottomDockWidgetArea)
+
+        # Trading flows: submissions refresh open orders; Positions "Close"
+        # pre-fills the ticket (never auto-submits).
+        self.ticket_panel.order_submitted.connect(self.orders_panel.refresh)
+        self.positions_panel.close_requested.connect(self.ticket_panel.prefill_close)
 
     def _add_dock(self, widget, title: str, area: Qt.DockWidgetArea) -> QDockWidget:
         dock = QDockWidget(title, self)
@@ -112,6 +126,15 @@ class MainWindow(QMainWindow):
         quit_action.setShortcut("Ctrl+Q")
         quit_action.triggered.connect(self.close)
         file_menu.addAction(quit_action)
+
+        trading_menu: QMenu = menubar.addMenu("&Trading")
+        self.paper_action = QAction("Paper mode", self, checkable=True)
+        self.paper_action.setChecked(store.get_paper_mode())
+        self.paper_action.triggered.connect(self._on_paper_toggled)
+        trading_menu.addAction(self.paper_action)
+        cancel_all_action = QAction("Cancel all orders", self)
+        cancel_all_action.triggered.connect(self.orders_panel._on_cancel_all)
+        trading_menu.addAction(cancel_all_action)
 
         view_menu: QMenu = menubar.addMenu("&View")
         for dock in self.findChildren(QDockWidget):
@@ -147,13 +170,41 @@ class MainWindow(QMainWindow):
         self._update_status_message()
 
     def _update_status_message(self) -> None:
+        mode = services.trading_mode().upper()
         if self._is_demo:
             self.statusBar().showMessage(
-                "Demo data (sample portfolio) - connect your Kraken account in "
-                "File > Settings to see your live account."
+                f"Demo data (sample portfolio) · Trading: {mode} - connect your "
+                "Kraken account in File > Settings to see your live account."
             )
         else:
-            self.statusBar().showMessage("Ready")
+            self.statusBar().showMessage(f"Ready · Trading: {mode}")
+
+    # ---------- trading mode ----------
+
+    def _on_paper_toggled(self, checked: bool) -> None:
+        if checked:
+            store.set_paper_mode(True)
+        else:
+            # Going live is the one action that needs typed intent.
+            if resolve_demo():
+                QMessageBox.warning(
+                    self,
+                    "Live trading unavailable",
+                    "Connect a Kraken account in File > Settings first.",
+                )
+                self.paper_action.setChecked(True)
+                return
+            text, ok = QInputDialog.getText(
+                self,
+                "Enable live trading",
+                "Orders will be sent to Kraken with REAL funds.\nType LIVE to confirm:",
+            )
+            if not ok or text.strip() != "LIVE":
+                self.paper_action.setChecked(True)
+                return
+            store.set_paper_mode(False)
+        self.ticket_panel.refresh_mode_badge()
+        self._update_status_message()
 
     # ---------- settings + first run ----------
 
@@ -168,6 +219,8 @@ class MainWindow(QMainWindow):
             "Crypto Quant Desk (Demo data)" if self._is_demo else "Crypto Quant Desk"
         )
         self._mode_badge.setText("DEMO" if self._is_demo else "LIVE")
+        self.paper_action.setChecked(store.get_paper_mode())
+        self.ticket_panel.refresh_mode_badge()
         self._update_status_message()
         self._refresh_all()
 
@@ -193,6 +246,8 @@ class MainWindow(QMainWindow):
             self.risk_panel,
             self.chart_panel,
             self.analyst_panel,
+            self.ticket_panel,
+            self.orders_panel,
         )
         for panel in panels:
             if hasattr(panel, "refresh"):

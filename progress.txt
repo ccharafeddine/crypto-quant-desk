@@ -1,9 +1,7 @@
 # progress.txt — crypto-quant-desk v2 overhaul
 
-Status: Phase 2 — COMPLETE (2.9 verified 2026-07-09: owner connected real keys
-via File > Settings, Verify & Save stored them in Credential Manager, live
-Positions render on Windows via REST).
-Next: Phase 3 (trading core) per docs/IMPLEMENTATION_PLAN.md.
+Status: Phase 3 — 3.1-3.7 built and tested; 3.8 live-fire gate awaits owner.
+Next: owner runs the gated live-fire test (below), then Phase 4 (WebSocket).
 Last session: 2026-07-09
 
 ## Done
@@ -47,13 +45,29 @@ Last session: 2026-07-09
   verify task survives dialog closure; process-wide shared NonceCounter.
 - 2026-07-09: 2.9 DONE - owner verified real keys in-app, live Positions render.
 
+- 2026-07-09: CI added (GitHub Actions windows-latest: ruff check/format,
+  pytest; committed .githooks/pre-commit runs the same gate locally via
+  `git config core.hooksPath .githooks`). One-time ruff format applied.
+- 2026-07-09: Phase 3.1-3.7 built, 212 tests green, GUI boots clean in demo:
+  trading/limits.py (PairSpec + validate_order: precision, minimums, cap,
+  fail-closed on missing price) · trading/audit.py (JSONL month-rolled,
+  asyncio-locked) · trading/paper.py PaperBroker (market/limit/stop/trailing
+  fills vs live marks, maker/taker fees, persisted overlay, corrupt->.bak) ·
+  rest.py order wrappers (AddOrder + close[] conditional close, edit, cancel,
+  cancel-all, query; no-withdrawal guard test) · trading/orders.py OrderService
+  (one-shot confirmation tokens, paper/live routing, UNKNOWN reconciliation,
+  full audit trail) · ui/services.py singletons (trading_mode: live requires
+  paper-off AND non-demo) · ticket panel + order-confirm dialog + orders panel
+  + Trading menu (typed-LIVE gate) + Positions "Close" pre-fill.
+
 ## Next
-- Phase 3 (trading core): 3.1 limits.py -> 3.2 audit.py -> 3.3 PaperBroker ->
-  3.4 REST order wrappers -> 3.5 OrderService -> 3.6-3.7 ticket/orders panels ->
-  3.8 gated live-fire test (max-order cap at $10, place far-from-market limit,
-  observe ack, cancel; owner at keyboard).
-- Note: owner's Kraken key needs Create & Modify Orders permission added
-  before 3.8 (read permissions suffice until then).
+- 3.8 owner live-fire gate: add Create & Modify Orders permission to the
+  Kraken key; set max order value to $10 in Settings > Trading; Trading >
+  uncheck Paper mode (type LIVE); place a limit buy far below market (e.g.
+  0.0001 BTC @ half the current price); see ack in Open Orders + audit log
+  (%LOCALAPPDATA%\CryptoQuantDesk\audit\); cancel it from the panel.
+- Phase 4 (WebSocket streaming): ws.py public ticker + heartbeat/backoff ->
+  live marks in panels -> private executions stream -> PnL tick flash.
 
 ## Environment notes
 - Windows box: repo at C:\Users\mnc-9\crypto-quant-desk, venv at .venv (installed,
