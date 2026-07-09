@@ -117,6 +117,43 @@ QStatusBar {
 }
 QStatusBar::item { border: none; }
 
+/* ---- Tabs: dock tab bars (tabified panels) and QTabWidget (Settings) ---- */
+QTabWidget::pane { border: 1px solid ${border}; }
+QTabBar { background: transparent; }
+QTabBar::tab {
+    background: ${surface};
+    color: ${text_muted};
+    border: 1px solid ${border};
+    padding: 5px 14px;
+    margin-right: 2px;
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+}
+QTabBar::tab:selected {
+    background: ${bg};
+    color: ${text};
+    border-bottom: 2px solid ${accent};
+}
+QTabBar::tab:hover:!selected { color: ${text}; }
+/* Bottom-dock tab bars grow downward: mirror the rounding and accent edge. */
+QTabBar::tab:bottom {
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+    border-bottom-left-radius: 4px;
+    border-bottom-right-radius: 4px;
+}
+QTabBar::tab:bottom:selected { border-bottom: 1px solid ${border}; border-top: 2px solid ${accent}; }
+
+QListWidget {
+    background-color: ${bg};
+    color: ${text};
+    border: 1px solid ${border};
+    border-radius: 5px;
+    font-family: ${font_mono};
+}
+QListWidget::item { padding: 3px 8px; }
+QListWidget::item:selected { background: ${accent}; color: ${bg}; }
+
 /* ---- Tables and all numeric data: mono, subtle row separators ---- */
 QTableWidget, QTableView {
     background-color: ${bg};
