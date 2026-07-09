@@ -137,26 +137,51 @@ class SettingsDialog(QDialog):
         self.kraken_status.setText("Verifying against Kraken...")
         asyncio.ensure_future(self._verify_and_save(key, secret))
 
+    def _set_status(self, text: str) -> None:
+        """UI update that survives the dialog being closed mid-verify.
+
+        The verify task can outlive the dialog (user closes it while the HTTP
+        call is in flight); touching a deleted Qt widget raises RuntimeError,
+        which must not surface as an unhandled task exception.
+        """
+        try:
+            self.kraken_status.setText(text)
+        except RuntimeError:
+            pass
+
     async def _verify_and_save(self, key: str, secret: str) -> None:
         try:
             async with KrakenRESTClient(api_key=key, api_secret=secret) as client:
                 balance = await client.get_balance()
         except KrakenAuthError:
-            self.kraken_status.setText(
+            self._set_status(
                 "Kraken rejected the key pair (invalid key, secret, or nonce). "
                 "Keys were NOT saved."
             )
             return
         except KrakenError as e:
-            self.kraken_status.setText(f"Verification failed: {e}. Keys were NOT saved.")
+            self._set_status(f"Verification failed: {e}. Keys were NOT saved.")
+            return
+        except Exception:  # noqa: BLE001 - never let a verify crash the app
+            self._set_status("Verification failed unexpectedly. Keys were NOT saved.")
+            import logging
+
+            logging.getLogger("cqd").exception("key verification failed")
             return
         finally:
-            self.verify_btn.setEnabled(True)
+            try:
+                self.verify_btn.setEnabled(True)
+            except RuntimeError:
+                pass
 
+        # Verification passed: store the pair, even if the dialog is gone.
         credentials.set_kraken_keys(key, secret)
-        self.kraken_key.clear()
-        self.kraken_secret.clear()
-        self.kraken_status.setText(
+        try:
+            self.kraken_key.clear()
+            self.kraken_secret.clear()
+        except RuntimeError:
+            pass
+        self._set_status(
             f"Verified: {len(balance)} balance entries visible. Keys stored in "
             "Windows Credential Manager."
         )

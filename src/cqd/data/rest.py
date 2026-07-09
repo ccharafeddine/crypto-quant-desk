@@ -91,6 +91,19 @@ class NonceCounter:
         return n
 
 
+_shared_nonce: NonceCounter | None = None
+
+
+def _get_shared_nonce() -> NonceCounter:
+    """One process-wide counter: every panel builds its own client, and two
+    independent counters over the same state file can hand out colliding
+    nonces to concurrent private calls (Kraken rejects reuse per key)."""
+    global _shared_nonce
+    if _shared_nonce is None:
+        _shared_nonce = NonceCounter(app_data_dir() / "nonce")
+    return _shared_nonce
+
+
 class _RateLimiter:
     """Kraken private-call counter as a token bucket (Starter tier defaults).
 
@@ -202,7 +215,7 @@ class KrakenRESTClient:
             )
         await self._limiter.acquire(cost)
         if self._nonce is None:
-            self._nonce = NonceCounter(app_data_dir() / "nonce")
+            self._nonce = _get_shared_nonce()
         path = f"/0/private/{endpoint}"
         nonce = str(self._nonce.next())
         payload = {"nonce": nonce, **(data or {})}
