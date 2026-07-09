@@ -116,3 +116,53 @@ class TestOrchestrator:
         assert pr.risk_contribution.sum() == pytest.approx(100.0, abs=0.5)
         # Both alts are high-beta to BTC by construction â†’ book beta > 1
         assert pr.book_beta_btc > 1.0
+        # Full history for every asset: window == frame, nothing excluded.
+        assert pr.window_days == pr.frame_days == 300
+        assert pr.excluded_assets == ()
+
+    def test_common_history_window_prevents_dilution(self):
+        # Regression (2026-07-09 audit): an asset listed mid-window contributed
+        # 0% (NaN skipped by the row sum) at full weight on days it did not
+        # exist, diluting vol/beta/tail. The computation must restrict itself to
+        # the window where every included asset has data.
+        rng = np.random.default_rng(7)
+        dates = pd.date_range("2025-01-01", periods=60, freq="D")
+        btc = pd.Series(rng.normal(0.0, 0.01, 60), index=dates)
+        alt = pd.Series(np.nan, index=dates)
+        alt.iloc[-10:] = rng.normal(0.0, 0.10, 10)  # 10x vol, 10 days of history
+        df = pd.DataFrame({"BTC": btc, "ALT": alt})
+        weights = pd.Series({"BTC": 0.5, "ALT": 0.5})
+
+        pr = R.compute_portfolio_risk(weights, df, btc_col="BTC")
+
+        assert pr.frame_days == 60
+        assert pr.window_days == 10
+        # Vol must match a manual computation over the common window only.
+        window = df.iloc[-10:]
+        port = (window * 0.5).sum(axis=1)
+        import cqd.engine.metrics as M
+
+        assert pr.ann_vol == pytest.approx(M.annualize_vol(port))
+        # And must be far above the diluted union-window figure.
+        diluted = (df * 0.5).sum(axis=1)  # NaN -> skipped -> 0% at full weight
+        assert pr.ann_vol > M.annualize_vol(diluted) * 1.5
+
+    def test_asset_with_no_data_is_excluded_and_reported(self):
+        rng = np.random.default_rng(3)
+        dates = pd.date_range("2025-01-01", periods=30, freq="D")
+        df = pd.DataFrame(
+            {
+                "BTC": rng.normal(0.0, 0.02, 30),
+                "DEAD": np.full(30, np.nan),
+            },
+            index=dates,
+        )
+        weights = pd.Series({"BTC": 0.7, "DEAD": 0.3})
+
+        pr = R.compute_portfolio_risk(weights, df, btc_col="BTC")
+
+        assert pr.excluded_assets == ("DEAD",)
+        # Weights renormalized over the assets that actually have data.
+        assert pr.weights.sum() == pytest.approx(1.0)
+        assert list(pr.weights.index) == ["BTC"]
+        assert pr.ann_vol > 0

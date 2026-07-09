@@ -203,6 +203,12 @@ class PortfolioRisk:
     per_asset_beta: pd.Series
     risk_contribution: pd.Series
     tail: dict[str, float]
+    # Common-history window actually used for vol/tail (see compute_portfolio_risk
+    # docstring): rows in the window vs rows in the input frame, plus any assets
+    # excluded for having no return data at all. The UI footnotes a shrunk window.
+    window_days: int = 0
+    frame_days: int = 0
+    excluded_assets: tuple[str, ...] = ()
 
 
 def compute_portfolio_risk(
@@ -219,12 +225,27 @@ def compute_portfolio_risk(
     returns : daily simple-return DataFrame, one column per asset. Must
               include `btc_col` for beta. Index is dates.
     btc_col : the BTC column name in `returns`.
+
+    Portfolio vol / risk contribution / tail metrics are computed over the
+    COMMON-HISTORY window: rows where every included asset has data. Leading
+    NaNs (assets listed mid-window) would otherwise be skipped by the row sum,
+    silently treating "asset did not exist" as "asset returned 0%" at full
+    weight and diluting every downstream number (2026-07-09 audit). Assets with
+    no return data at all are excluded and reported in `excluded_assets`;
+    per-asset betas still use each asset's full pairwise overlap with BTC.
     """
-    assets = [a for a in weights.index if a in returns.columns]
+    candidates = [a for a in weights.index if a in returns.columns]
+    excluded = tuple(a for a in candidates if returns[a].first_valid_index() is None)
+    assets = [a for a in candidates if a not in excluded]
     w = weights.loc[assets]
     w = w / w.sum() if w.sum() != 0 else w
 
     rets = returns[assets].dropna(how="all")
+    frame_days = len(rets)
+    if assets and frame_days:
+        window_start = max(rets[a].first_valid_index() for a in assets)
+        rets = rets.loc[rets.index >= window_start]
+    window_days = len(rets)
     cov = rets.cov().values
 
     # Portfolio return series for vol / tail metrics
@@ -250,4 +271,7 @@ def compute_portfolio_risk(
         per_asset_beta=per_beta,
         risk_contribution=risk_contribution_pct(w, cov),
         tail=tail_metrics(port_rets),
+        window_days=window_days,
+        frame_days=frame_days,
+        excluded_assets=excluded,
     )
