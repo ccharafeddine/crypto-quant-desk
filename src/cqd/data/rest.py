@@ -309,3 +309,93 @@ class KrakenRESTClient:
     async def get_ws_token(self) -> str:
         raw = await self._private("GetWebSocketsToken")
         return str(raw["token"])
+
+    # ---------- order mutations (spot only; no withdrawal wrapper EVER) ----------
+
+    @staticmethod
+    def _num(value: float | str) -> str:
+        """Decimal string for Kraken params (never scientific notation)."""
+        if isinstance(value, str):
+            return value
+        s = f"{value:.10f}".rstrip("0").rstrip(".")
+        return s or "0"
+
+    async def add_order(
+        self,
+        *,
+        pair: str,
+        side: str,
+        ordertype: str,
+        volume: float,
+        price: float | str | None = None,
+        price2: float | str | None = None,
+        close_ordertype: str | None = None,
+        close_price: float | str | None = None,
+        close_price2: float | str | None = None,
+        validate_only: bool = False,
+    ) -> dict[str, Any]:
+        """Place one spot order; returns {"txid": [...], "descr": {...}}.
+
+        `close_*` attaches Kraken's conditional close (TP/SL on the position
+        opened by this order) - one atomic request, never two racing orders.
+        `validate_only=True` asks Kraken to validate without executing.
+        """
+        data: dict[str, Any] = {
+            "pair": pair,
+            "type": side,
+            "ordertype": ordertype,
+            "volume": self._num(volume),
+        }
+        if price is not None:
+            data["price"] = self._num(price)
+        if price2 is not None:
+            data["price2"] = self._num(price2)
+        if close_ordertype:
+            data["close[ordertype]"] = close_ordertype
+            if close_price is not None:
+                data["close[price]"] = self._num(close_price)
+            if close_price2 is not None:
+                data["close[price2]"] = self._num(close_price2)
+        if validate_only:
+            data["validate"] = "true"
+        raw = await self._private("AddOrder", data)
+        return {
+            "txid": list(raw.get("txid") or []),
+            "descr": dict(raw.get("descr") or {}),
+        }
+
+    async def edit_order(
+        self,
+        txid: str,
+        pair: str,
+        *,
+        volume: float | None = None,
+        price: float | str | None = None,
+        price2: float | str | None = None,
+    ) -> dict[str, Any]:
+        """Amend an open order's volume/price; returns Kraken's edit result."""
+        data: dict[str, Any] = {"txid": txid, "pair": pair}
+        if volume is not None:
+            data["volume"] = self._num(volume)
+        if price is not None:
+            data["price"] = self._num(price)
+        if price2 is not None:
+            data["price2"] = self._num(price2)
+        return await self._private("EditOrder", data)
+
+    async def cancel_order(self, txid: str) -> int:
+        """Cancel one order; returns the cancelled count Kraken reports."""
+        raw = await self._private("CancelOrder", {"txid": txid})
+        return int(raw.get("count", 0))
+
+    async def cancel_all(self) -> int:
+        """Cancel every open order on the account."""
+        raw = await self._private("CancelAll")
+        return int(raw.get("count", 0))
+
+    async def query_orders(self, txids: list[str]) -> dict[str, Any]:
+        """Order info by txid (open or closed) - used for UNKNOWN reconciliation."""
+        if not txids:
+            return {}
+        raw = await self._private("QueryOrders", {"txid": ",".join(txids)})
+        return dict(raw) if isinstance(raw, dict) else {}

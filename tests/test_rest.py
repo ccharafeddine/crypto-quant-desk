@@ -288,6 +288,95 @@ def test_ws_token() -> None:
     assert asyncio.run(_client(handler).get_ws_token()) == "WS-TOKEN"
 
 
+def test_add_order_params_and_conditional_close() -> None:
+    from urllib.parse import parse_qs
+
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.update(parse_qs(request.content.decode()))
+        return httpx.Response(
+            200,
+            json=_envelope(
+                {"txid": ["OABC-123"], "descr": {"order": "buy 0.001 XBTUSD @ limit 50000"}}
+            ),
+        )
+
+    out = asyncio.run(
+        _client(handler).add_order(
+            pair="XBTUSD",
+            side="buy",
+            ordertype="limit",
+            volume=0.001,
+            price=50000.0,
+            close_ordertype="stop-loss",
+            close_price=45000.0,
+        )
+    )
+    assert out["txid"] == ["OABC-123"]
+    assert seen["pair"] == ["XBTUSD"]
+    assert seen["type"] == ["buy"]
+    assert seen["ordertype"] == ["limit"]
+    assert seen["volume"] == ["0.001"]  # decimal string, no scientific notation
+    assert seen["price"] == ["50000"]
+    assert seen["close[ordertype]"] == ["stop-loss"]
+    assert seen["close[price]"] == ["45000"]
+    assert "validate" not in seen
+
+
+def test_add_order_tiny_volume_never_scientific() -> None:
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        from urllib.parse import parse_qs
+
+        seen.update(parse_qs(request.content.decode()))
+        return httpx.Response(200, json=_envelope({"txid": ["X"], "descr": {}}))
+
+    asyncio.run(
+        _client(handler).add_order(pair="XBTUSD", side="buy", ordertype="market", volume=0.00005)
+    )
+    assert seen["volume"] == ["0.00005"]  # not "5e-05"
+
+
+def test_add_order_rejection_maps_to_order_rejected() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"error": ["EOrder:Insufficient funds"]})
+
+    with pytest.raises(OrderRejected):
+        asyncio.run(
+            _client(handler).add_order(pair="XBTUSD", side="buy", ordertype="market", volume=1.0)
+        )
+
+
+def test_cancel_and_cancel_all_and_edit() -> None:
+    calls = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request.url.path)
+        if request.url.path.endswith("CancelOrder"):
+            return httpx.Response(200, json=_envelope({"count": 1}))
+        if request.url.path.endswith("CancelAll"):
+            return httpx.Response(200, json=_envelope({"count": 3}))
+        return httpx.Response(200, json=_envelope({"txid": "ONEW-1"}))
+
+    c = _client(handler)
+
+    async def run():
+        assert await c.cancel_order("OABC-123") == 1
+        assert await c.cancel_all() == 3
+        out = await c.edit_order("OABC-123", "XBTUSD", price=51000.0)
+        assert out["txid"] == "ONEW-1"
+
+    asyncio.run(run())
+    assert calls == ["/0/private/CancelOrder", "/0/private/CancelAll", "/0/private/EditOrder"]
+
+
+def test_no_withdrawal_surface_exists() -> None:
+    # Permanent guardrail: the client must never grow a withdrawal code path.
+    assert not [m for m in dir(KrakenRESTClient) if "withdraw" in m.lower()]
+
+
 def test_body_is_form_encoded_json_free() -> None:
     # Kraken private endpoints take form encoding, not JSON.
     def handler(request: httpx.Request) -> httpx.Response:
