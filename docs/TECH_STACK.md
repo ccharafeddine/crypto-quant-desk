@@ -75,7 +75,7 @@ No user accounts. "Auth" = Kraken API key pair with permissions: Query Funds, Qu
 |---|---|---|---|
 | Kraken REST | `https://api.kraken.com` | account + market data, orders | yes |
 | Kraken WebSocket v2 | `wss://ws.kraken.com/v2`, `wss://ws-auth.kraken.com/v2` | streaming | yes (REST fallback exists) |
-| Anthropic API | `https://api.anthropic.com` (via `anthropic` SDK), model: latest Sonnet-class | analyst panel | optional |
+| Anthropic API | `https://api.anthropic.com` (via `anthropic` SDK), model `claude-opus-4-8` (`cqd.analyst.llm.DEFAULT_MODEL`) | analyst panel | optional |
 | Kraken CLI / `kraken mcp` | local binary (WSL on Windows) | analyst MCP data path | optional |
 
 No other network calls, ever. No telemetry, no update checks, no analytics.
