@@ -1,15 +1,18 @@
 # APP_FLOW.md — Crypto Quant Desk v2
 
-Desktop Qt app: "screens" are dockable panels inside one `QMainWindow`, plus modal dialogs. No URL routes; identifiers below are the canonical names used in code (`ui/panels/*`, `ui/dialogs/*`).
+Desktop Qt app: "screens" are adjustable card panels inside one workspace (Qt Advanced Docking System over a `QMainWindow`), plus modal dialogs. Every panel can be dragged, split, tab-stacked, floated, resized, hidden, and reopened; layouts save/restore as named perspectives (FL-W1). No URL routes; identifiers below are the canonical names used in code (`ui/panels/*`, `ui/dialogs/*`).
 
 ## Screen inventory
 
 | ID | Kind | Module | Purpose |
 |---|---|---|---|
-| `main_window` | window | `ui/main_window.py` | Shell: menu bar, status bar, dock layout |
+| `main_window` | window | `ui/main_window.py` | Shell: menu bar, status bar, QtAds workspace host, perspectives |
+| `watchlist_panel` | dock panel | `ui/panels/watchlist.py` (new, E3) | Markets: price, 24h %, volume, sparkline; selection sets the active symbol |
 | `positions_panel` | dock panel | `ui/panels/positions.py` | Holdings, marks, USD value, cost basis, break-even, unrealized PnL, Close action |
 | `risk_panel` | dock panel | `ui/panels/risk.py` | Vol, EWMA vol, BTC beta, HHI, effective bets, risk contribution, tail metrics + footnotes |
-| `chart_panel` | dock panel | `ui/panels/chart.py` | OHLC/line chart of selected pair (pyqtgraph) |
+| `chart_panel` | dock panel | `ui/panels/chart.py` | Candlestick + volume of the active symbol, cost-basis/break-even overlays, fill markers (pyqtgraph) |
+| `tape_panel` | dock panel | `ui/panels/tape.py` (new, E3) | Time & sales: streaming trades (price, size, side, time) for the active symbol |
+| `analytics_panel` | dock panel | `ui/panels/analytics.py` (new, E4) | Bloomberg-grade suite: ratios, correlation/exposure, attribution, scenario/stress |
 | `performance_panel` | dock panel | `ui/panels/performance.py` (new) | Equity curve, PnL history, drawdown, trade stats, per-position performance |
 | `ticket_panel` | dock panel | `ui/panels/ticket.py` (new) | Order entry: pair, side, type, qty, price(s), TP/SL, submit |
 | `orders_panel` | dock panel | `ui/panels/orders.py` (new) | Open orders (cancel/edit), recent fills |
@@ -22,7 +25,7 @@ Desktop Qt app: "screens" are dockable panels inside one `QMainWindow`, plus mod
 
 Status bar (always visible): connection state (`LIVE ● / DELAYED ● / OFFLINE ●`), mode badge (`PAPER` amber / `LIVE` red), data source (`REST / DEMO`), last-update clock.
 
-Menus: **File** (Settings, Disconnect account, Exit) · **View** (panel visibility toggles, Theme submenu) · **Trading** (Paper mode toggle, Cancel all orders) · **Help** (About, Open audit log folder).
+Menus: **File** (Settings, Disconnect account, Exit) · **View** (panel visibility toggles, Perspectives submenu [Trading/Analysis/Monitor + Save/Delete], Reset layout, Theme submenu) · **Trading** (Paper mode toggle, Cancel all orders) · **Help** (About, Open audit log folder).
 
 ## Flows
 
@@ -92,6 +95,24 @@ View > Theme > {Slate (default), Amber, Teal} → QSS rebuilt and applied live �
 
 ### FL-10 Shutdown
 Exit → if live orders were placed this session, no special handling (orders live on Kraken); if paper fills are pending write, flush simulator state; WebSocket closed cleanly; window layout saved (QSettings).
+
+### FL-W1 Arrange the workspace (adjustable panels + perspectives)
+1. User drags a panel's title bar → QtAds shows drop zones (edges + center tab targets) → release docks/splits/tabs it; drag beyond the window floats it as its own top-level window.
+2. Drag a splitter between panels → both resize live (width and height); double-click a title bar toggles float.
+3. View > panel name → hides/shows that panel; a closed panel keeps its state and re-docks to its last position (or default if none).
+4. View > Perspectives > {Trading, Analysis, Monitor} → applies a saved arrangement live. "Save perspective…" stores the current arrangement under a name; "Delete" removes a custom one (presets are not deletable).
+5. View > Reset layout → confirm → restores the default arrangement.
+6. On exit the current arrangement is saved to QSettings; on next launch it restores. A saved layout that fails to deserialize (version/panel mismatch) silently falls back to the default; the app never fails to open because of a bad layout.
+
+### FL-W2 Select the active symbol
+1. Click a row in `watchlist_panel` (or pick a pair in `ticket_panel`) → that becomes the active symbol.
+2. `chart_panel`, `book_panel`, and `tape_panel` all switch to the active symbol; the ticket's pair follows unless the user has locked it (pair combo edited manually).
+3. The stream subscribes to the new symbol's ticker/book/trade channels and unsubscribes the old ones it no longer needs; held-asset marks always stay subscribed regardless of the active symbol.
+
+### FL-W3 Analytics suite
+1. `analytics_panel` presents sections: Ratios, Correlation & exposure, Attribution, Scenario & stress (tabs or a scrollable stack).
+2. Each section pulls engine-computed values off the current portfolio snapshot + history; every metric carries its footnote. Insufficient history → per-metric `n/a` with the reason, never a crash.
+3. Scenario & stress controls (shock size, Monte Carlo horizon/paths, what-if position delta) are inputs that re-run the pure engine and redraw; nothing touches live data or the money path.
 
 ## Redirect logic summary
 

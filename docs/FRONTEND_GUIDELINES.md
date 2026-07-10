@@ -53,10 +53,19 @@ Size scale (pt): app title 14 semibold · panel title 11 semibold · table heade
 
 ## Layout and responsiveness
 
-Desktop-only; "responsive" = dock behavior, not breakpoints:
-- Default layout ~1600×900: left column Positions above Performance; center Chart above Ticket; right column Risk, Orders, Analyst/Alerts tabbed.
-- All panels dockable/floatable/closable; layout saved to QSettings on exit, restored on start; View menu can reopen closed panels; minimum window 1200×700.
+Desktop-only; "responsive" = dock behavior, not breakpoints. The workspace host is the **Qt Advanced Docking System** (`PySide6-QtAds`), not raw QDockWidgets.
+- Every panel is a `CDockWidget`: drag to split, tab-stack, float as a top-level window, resize freely (width and height), hide, and reopen. This is the F10 adjustable workspace.
+- Default arrangement ≈ Watchlist (left) · Chart above Order book (center) · Ticket above Depth (right) · Holdings + Analytics (bottom, tabbed). Ships as the "Trading" perspective.
+- **Perspectives**: named layouts saved to QSettings — presets "Trading", "Analysis", "Monitor" plus user-saved ones. **Reset layout** restores the default. Layout persists on exit / restores on launch; a layout that fails to deserialize falls back to the default (never blocks startup). Minimum window 1200×700.
 - Tables get horizontal scrollbars rather than truncating numeric columns; last column stretches.
+
+## Card chrome & workspace styling (QtAds)
+
+Panels read as premium cards, not flat regions:
+- **Elevation** is conveyed by `bg_*`/border steps (no drop shadows inside the workspace): window `bg` < panel `surface` < raised header/controls. Card radius 6px, 1px `border`; the active/focused card gets a 1px `accent` top edge or `border_strong` outline.
+- **Per-panel header** (`PanelHeader`): title (11pt semibold) on the left; panel-specific controls on the right — symbol selector, timeframe segmented control, and a settings gear where relevant. Controls are ghost-styled, 24px tall, and never shift the header height.
+- **QtAds surfaces are themed through tokens** (no hardcoded hex): dock tab bar matches the existing `QTabBar` tokens (selected tab = `bg` + 2px `accent` edge); title bars use `surface`; splitter handles are 4px, `border`, hover `accent`; the floating-widget frame uses `surface` + `border`. Auto-hide/pin tabs, where used, follow the same tab tokens.
+- **Note on token reconciliation (E2):** the implemented `Theme` dataclass currently exposes a smaller token set (`bg`, `surface`, `border`, `text`, `text_muted`, `accent`, `positive`, `negative`) than the table below. E2 unifies the two — either mapping the doc names onto the dataclass or extending the dataclass with the elevation tokens — and this file is updated to match whatever ships. Until then, `surface`/`bg`/`border` are the real names in code.
 
 ## Component patterns
 
@@ -73,7 +82,12 @@ Minimal and instant-feeling: state color changes 120ms ease; PnL cell flash on t
 
 ## Charts (pyqtgraph)
 
-Background `bg_secondary`; axis/text `text_secondary`; grid `border` at 30% alpha; price line `accent`; equity curve `accent` with `green_dim`/`red_dim` area fill by sign of cumulative PnL; drawdown area `red` 25% alpha; cost-basis overlay dashed `warning`; crosshair with mono tooltip.
+Shared: background `surface`; axis/text `text_secondary`; grid `border` at 30% alpha; crosshair with a mono tooltip; no animation beyond pyqtgraph defaults.
+
+- **Line/equity:** price line `accent`; equity curve `accent` with `green_dim`/`red_dim` area fill by sign of cumulative PnL; drawdown area `red`/`negative` 25% alpha; cost-basis overlay dashed `warning`.
+- **Candlestick (E3):** up candles `green`/`positive`, down candles `red`/`negative`; bodies filled, wicks 1px same color; a volume subplot beneath (shared x-axis) with bars tinted by candle direction at ~50% alpha. Cost-basis and break-even are dashed horizontal lines (`warning`); recent fills are small triangle markers (buy `green` ▲ / sell `red` ▼) at their price/time.
+- **Depth ladder (E3):** two stacked half-tables (asks above, bids below) with per-row cumulative-depth bars drawn as a background fill — asks `red`/`negative`, bids `green`/`positive`, each at ~18% alpha scaled to cumulative size; price mono, size mono right-aligned; spread readout centered between the halves.
+- **Heatmaps (E4):** correlation and returns heatmaps use a diverging scale anchored at 0 — `negative` → neutral `surface` → `positive`; cell text is mono and only shown when the cell is large enough; a compact legend states the scale. Follow the `dataviz` skill for palette/contrast when building these.
 
 ## Icons
 

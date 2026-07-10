@@ -75,6 +75,50 @@ Numbered build sequence. Each step is one verifiable unit (module + its tests wh
 - **7.5** Clean-VM test per PRD success metric 3 (fresh Windows VM → install → keys → paper order &lt; 5 min).
 - **7.6** README refresh with real screenshots; tag `v2.0.0`.
 
+## Expansion v2.1 — Adjustable workspace + premium UI + Bloomberg analytics
+
+New initiative (started 2026-07-09), parallel to the pending Phase 6/7 work. Turns the fixed dock cockpit into a fully adjustable card-panel workspace, raises the visual bar above Kraken's desktop app, and surfaces an institutional-grade analytics suite. Same discipline: every step ends `pytest -q` green + `ruff` clean + CI green; engine additions are pure math with tests in the same commit; the money path (`OrderService` → validation → confirm → mode) is never touched.
+
+### E0 — Encode the plan (docs + dependency) *(this step)*
+- **E0.1** Add `PySide6-QtAds>=5.0` to `pyproject.toml` + `TECH_STACK.md` with the PySide6 lockstep-coupling note. *(done — QtAds 5.0.0 verified importing on py3.14.2 / PySide6 6.11.1)*
+- **E0.2** Update `PRD.md` (F10 workspace, F11 premium UI, F12 analytics suite + acceptance criteria), `APP_FLOW.md` (workspace + new-panel flows), `FRONTEND_GUIDELINES.md` (card chrome, elevation tokens, per-panel header controls, candlestick/heatmap/depth-ladder specs, QtAds styling), and this file.
+
+### E1 — Docking foundation (QtAds)
+- **E1.1** Introduce a `CDockManager`-based workspace host in `main_window.py`; wrap each existing `Panel` in a `CDockWidget`. Preserve every existing signal wiring verbatim. Default layout ≈ the agreed mockup (Watchlist left; Chart+Book center; Ticket+Depth right; Holdings+Analytics bottom). *(FRONTEND: Layout)*
+- **E1.2** Layout persistence: save/restore QtAds state to QSettings on close/open; **Reset layout** action; graceful fallback to the default layout when stored state is missing/incompatible.
+- **E1.3** Named **perspectives** ("Trading", "Analysis", "Monitor") with save/load/delete in the View menu; ship the three presets. *(APP_FLOW FL-W1)*
+- **E1.4** View-menu panel registry (show/hide/re-open every panel) rebuilt against QtAds `CDockWidget.toggleViewAction()`.
+- *Tests:* perspective serialize/restore round-trip (pytest-qt), panel-registry completeness, default-layout builder.
+
+### E2 — Premium visual system
+- **E2.1** `ui-architect` audit → refined token set. Reconcile the doc token names with the implemented `Theme` dataclass and add elevation tokens (`surface`, `surface_raised`, `elevated`) + card shadow/border language.
+- **E2.2** Card chrome: QtAds title-bar/tab/splitter styling matched to theme tokens; per-panel header controls (symbol selector, timeframe, settings gear) via an extended `PanelHeader`.
+- **E2.3** Density + type pass across tables/metrics; sparklines; refined badges/pills; PnL tick-flash retained.
+- *Tests:* `build_qss` covers the new QtAds selectors without raising; theme-switch smoke over all panels.
+
+### E3 — Real charts + market microstructure panels
+- **E3.1** Candlestick chart panel (pyqtgraph custom `CandlestickItem`): timeframe selector, volume subplot, cost-basis/break-even overlays, recent-fill markers, crosshair + mono tooltip. Replaces the `chart.py` placeholder. *(FRONTEND: Charts)*
+- **E3.2** Order-book depth ladder redesign: cumulative colored depth bars (bid green / ask red), spread readout, price-click pre-fills ticket price only. *(reuses existing `book.py` data path)*
+- **E3.3** New **Watchlist** panel: market, price, 24h %, volume, inline sparkline; selection drives the active symbol.
+- **E3.4** New **Time & Sales / trades tape** panel from the WS `trade` channel.
+- **E3.5** Active-symbol bus so chart / book / tape / ticket follow one selection.
+- *Tests:* candlestick + volume data transforms, watchlist table model, active-symbol routing.
+
+### E4 — Bloomberg analytics suite (all four tracks; each = pure engine + surfaced panel)
+- **E4a Risk & ratios** — add `sortino_ratio`, `calmar_ratio`, `rolling_sharpe`, `rolling_vol` to `engine/`; surface with existing VaR/CVaR, beta-to-BTC, tail metrics in an Analytics panel section. *(PRD AC12.1)*
+- **E4b Correlation & exposure** — asset correlation matrix + heatmap, per-holding risk contribution, allocation drift over time, crypto-sector exposure via the static sector map (TECH_STACK). *(PRD AC12.2)*
+- **E4c Performance attribution** — per-asset contribution to total PnL, realized vs unrealized split, NAV history, weekly/monthly returns heatmap, benchmark comparison vs BTC. *(PRD AC12.3)*
+- **E4d Scenario & stress** — historical shock replay (e.g. −30% BTC), Monte Carlo NAV projection, what-if position sizing, drawdown-recovery analytics. *(PRD AC12.4)*
+- *Tests:* each new engine function gets exhaustive unit tests (known-input vectors, NaN/empty guards) in the same commit; panel render smoke.
+
+### E5 — Polish + integration
+- **E5.1** Per-panel loading/error/empty states for every new panel per FRONTEND.
+- **E5.2** Perspective preset refinement, micro-interactions, empty-workspace handling.
+- **E5.3** Full regression + lint sweep; manual APP_FLOW walkthrough of the new FL-W flows; CI green.
+
+### Expansion dependency notes
+E1 precedes everything (it is the host). E2 layers on E1. E3 panels register into the E1 workspace and use the E2 header controls. E4 reuses existing engine + `data/returns.py`; E4c needs ledger history (Phase 2.4, done). E5 requires E1–E4.
+
 ## Phase 8 — Deferred (post-v1 roadmap, not scheduled)
 
 Autotrader host (strategy hooks onto OrderService + PaperBroker gates), multi-account profiles, trade-from-chart drag orders, historical USD conversion for crypto-quoted cost bases, risk-metric alert kinds if cut from 5.3, macOS packaging revival, more themes.

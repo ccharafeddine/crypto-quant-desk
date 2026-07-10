@@ -2,8 +2,8 @@
 
 ## Runtime
 
-- **Language:** Python **3.11+** (developed on 3.12; 3.11 is the floor in `pyproject.toml`)
-- **UI framework:** PySide6 (Qt 6) — native desktop, dockable panels
+- **Language:** Python **3.11+** (developed on 3.14; 3.11 is the floor in `pyproject.toml`)
+- **UI framework:** PySide6 (Qt 6) — native desktop. The workspace host is the **Qt Advanced Docking System** (`PySide6-QtAds`): every panel is a floatable/tabbable/freely-resizable card, and named layouts ("perspectives") save/restore to QSettings.
 - **Async:** asyncio bridged into Qt via qasync
 - **Target OS:** Windows 10/11 (primary). Code stays importable on macOS/Linux; only packaging is Windows-only in v1.
 
@@ -14,8 +14,9 @@ Versions are minimum pins (`>=`), matching the repo's existing convention; the l
 | Package | Pin | Purpose |
 |---|---|---|
 | `PySide6` | `>=6.7` | Qt UI |
+| `PySide6-QtAds` | `>=5.0` | **new** — adjustable docking workspace (Qt Advanced Docking System). See coupling note below. |
 | `qasync` | `>=0.27` | asyncio ↔ Qt event loop |
-| `pyqtgraph` | `>=0.13` | Charts (price, equity curve, drawdown) |
+| `pyqtgraph` | `>=0.13` | Charts (candlesticks, equity curve, drawdown, heatmaps) |
 | `pydantic` | `>=2.7` | Typed models for API payloads, alert rules, audit records |
 | `pandas` | `>=2.2` | Engine math |
 | `numpy` | `>=1.26` | Engine math |
@@ -28,6 +29,10 @@ Versions are minimum pins (`>=`), matching the repo's existing convention; the l
 | `winotify` | `>=1.1; sys_platform == 'win32'` | **new** — Windows toast notifications (alerts) |
 
 Dev (`[dev]` extra): `pytest>=8.0`, `pytest-asyncio>=0.23`, `pytest-qt>=4.4`, `ruff>=0.5`, `pyinstaller>=6.0`.
+
+**`PySide6-QtAds` version coupling.** QtAds ships `abi3` wheels but hard-pins `PySide6-Essentials==<matching 6.x>` (5.0.0 → 6.11.1). Consequence: PySide6 and QtAds must be upgraded in lockstep; a PySide6 bump that outruns QtAds will fail to resolve. Verified installing and importing (`from PySide6QtAds import CDockManager`) on Python 3.14.2 + PySide6 6.11.1. The import name is `PySide6QtAds` (no hyphen); the distribution name is `PySide6-QtAds`.
+
+**Crypto-sector classification (analytics).** Sector/exposure analytics (L1 / L2 / DeFi / meme / stablecoin, etc.) use a *static, in-repo* mapping of asset → sector — it is a fixed lookup table, not a third-party data feed, so it does not breach the Kraken-only data rule. Unmapped assets fall to an "Other" bucket. This map is the one piece of non-Kraken reference data allowed, and it ships no prices or fundamentals.
 
 ## Kraken connectivity
 

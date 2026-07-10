@@ -75,6 +75,32 @@ Existing engine (vol incl. EWMA, BTC beta, HHI, effective bets, risk contributio
 - **AC9.2** The installed app is self-contained (no Python required) and stores state only under `%LOCALAPPDATA%\CryptoQuantDesk` and Credential Manager.
 - **AC9.3** The installer contains no credentials, no personal data, no strategy code.
 
+## v2.1 Expansion features (adjustable workspace + premium UI + institutional analytics)
+
+Added after F1–F9 landed. These raise the app from a fixed cockpit to a fully user-arrangeable, visually premium terminal with Bloomberg-grade portfolio analytics. Same guardrails: Kraken-only data, money path untouched.
+
+### F10. Adjustable card-panel workspace
+Every section is its own card the user can resize (width and height), move, tab, float as a separate window, and close/reopen.
+- **AC10.1** Each panel is an independent dock card; the user can drag to split, tab-stack, float, and freely resize any panel. Built on the Qt Advanced Docking System.
+- **AC10.2** The full workspace layout persists to QSettings on exit and restores on launch; a corrupt/absent/incompatible saved layout falls back to the default without crashing.
+- **AC10.3** Named **perspectives** (at least "Trading", "Analysis", "Monitor") can be saved, loaded, and deleted; a **Reset layout** restores the default arrangement.
+- **AC10.4** Every panel can be hidden and reopened from the View menu; closing a panel never loses its state or wiring.
+
+### F11. Premium visual system
+The app looks as polished as, and aims to beat, Kraken's desktop app.
+- **AC11.1** Cards carry consistent chrome: elevation via `bg_*`/border steps, a header row with title and panel-specific controls (symbol, timeframe, gear), and themed QtAds tab/title/splitter styling — no hardcoded colors, all through tokens.
+- **AC11.2** Real candlestick charts (price + volume) replace the placeholder, with cost-basis/break-even overlays and fill markers.
+- **AC11.3** A redesigned order-book depth ladder with cumulative colored depth bars and spread readout.
+- **AC11.4** Consistent density, typography, sparklines, and PnL tick-flash across all panels; theme switching remains purely cosmetic.
+
+### F12. Bloomberg-grade analytics suite
+All computed from Kraken data (OHLC + ledgers/trades) plus the static sector map; no fundamentals, news, or third-party feeds.
+- **AC12.1 Risk & ratios**: Sortino, Calmar, rolling Sharpe/vol alongside existing annualized/EWMA vol, Sharpe, VaR/CVaR, beta-to-BTC, portfolio beta, tail metrics — each with its assumption footnote.
+- **AC12.2 Correlation & exposure**: asset correlation matrix + heatmap, per-holding risk contribution, concentration (Herfindahl, effective-N), allocation drift over time, crypto-sector exposure.
+- **AC12.3 Performance attribution**: per-asset contribution to total PnL, realized vs unrealized split, NAV/equity history, weekly/monthly returns heatmap, benchmark comparison vs BTC.
+- **AC12.4 Scenario & stress**: historical shock replay, Monte Carlo NAV projection, what-if position sizing, drawdown-recovery analytics.
+- **AC12.5** Every metric is engine-computed (pure, tested); the analyst panel may narrate them but never invents them.
+
 ## User stories
 
 - As the owner, I want my Kraken keys stored in Windows Credential Manager via a Settings dialog, so that no plaintext secret exists on disk or in the repo.
@@ -86,6 +112,9 @@ Existing engine (vol incl. EWMA, BTC beta, HHI, effective bets, risk contributio
 - As the owner, I want price and risk alerts as Windows notifications, so that I don't have to watch the screen.
 - As the owner, I want to ask Claude "review this week's trades," so that I get a narrative over numbers the engine computed.
 - As the owner, I want a Windows installer, so that I can put the app on another machine in minutes with zero private data inside it.
+- As the owner, I want to drag, resize, tab, and float every panel and save named workspace layouts, so that I can shape the terminal to whatever I'm doing (trading vs. analysis vs. passive monitoring).
+- As the owner, I want candlestick charts, a real depth ladder, and a watchlist in cards that look better than Kraken's app, so that I never miss Kraken's own UI.
+- As the owner, I want Bloomberg-style analytics (correlations, attribution, stress tests, ratios) computed from my own Kraken history, so that I can judge and stress my book like a desk would.
 
 ## Success metrics ("done" for v1)
 

@@ -8,6 +8,10 @@ license = { text = "MIT" }
 authors = [{ name = "Joe" }]
 dependencies = [
     "PySide6>=6.7",
+    # Qt Advanced Docking System: the adjustable card-panel workspace (float,
+    # tab, split, resize, save/restore perspectives). Hard-pins
+    # PySide6-Essentials to its matching 6.x; bump both together. See TECH_STACK.
+    "PySide6-QtAds>=5.0",
     "qasync>=0.27",
     "pyqtgraph>=0.13",
     "pydantic>=2.7",

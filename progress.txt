@@ -1,8 +1,10 @@
 # progress.txt — crypto-quant-desk v2 overhaul
 
-Status: Phase 5 — COMPLETE (analytics: performance, alerts, depth).
-Next: Phase 6 (AI analyst expansion) per docs/IMPLEMENTATION_PLAN.md, then
-Phase 7 (polish + Windows packaging).
+Status: Phases 0-5 COMPLETE. New initiative started: Expansion v2.1
+(adjustable QtAds workspace + premium UI + Bloomberg analytics). E0 (docs+dep)
+DONE; E1 (docking foundation) is next.
+Next: E1 QtAds workspace host in main_window.py (see IMPLEMENTATION_PLAN
+"Expansion v2.1"). Pending from before: Phase 6 (AI analyst), Phase 7 (packaging).
 Last session: 2026-07-09
 
 ## Done
@@ -86,7 +88,21 @@ Last session: 2026-07-09
   2.5s - WS book checksums deferred, documented) · get_ledgers on CLI client,
   synthetic coherent ledger on DemoClient · default layout tabified.
 
+- 2026-07-09: Repo MOVED C:\Users\mnc-9\crypto-quant-desk -> C:\Users\mnc-9\Documents\
+  crypto-quant-desk (robocopy /MOVE; plain mv/Move-Item hit EBUSY from a transient
+  Windows handle). Git history/remote intact, fsck clean. venv reinstalled and works.
+- 2026-07-09: Expansion v2.1 E0 complete (docs + dependency). Added PySide6-QtAds>=5.0
+  to pyproject + TECH_STACK (hard-pins PySide6-Essentials to matching 6.x; QtAds 5.0.0
+  <-> 6.11.1; verified import CDockManager on py3.14.2). Updated PRD (F10 workspace /
+  F11 premium UI / F12 analytics + AC10-12), APP_FLOW (QtAds workspace, watchlist/tape/
+  analytics panels, FL-W1..W3), FRONTEND_GUIDELINES (card chrome, QtAds styling,
+  candlestick/depth-ladder/heatmap chart specs), IMPLEMENTATION_PLAN (Expansion E0-E5).
+  242 tests green, ruff clean.
+
 ## Next
+- E1 (docking foundation): CDockManager workspace host in main_window.py; wrap each
+  Panel as a CDockWidget (float/tab/split/resize); save/restore layout to QSettings;
+  perspectives (Trading/Analysis/Monitor) + Reset layout; preserve all signal wiring.
 - Phase 6 (analyst): 6.1 analyst/llm.py Anthropic tool-use over engine
   outputs (explicit action only, cost display) -> 6.2 panel actions
   (commentary / trade review / ask) -> 6.3 optional kraken mcp via WSL.
@@ -94,13 +110,11 @@ Last session: 2026-07-09
   Windows installer, clean-VM test, README screenshots, tag v2.0.0.
 
 ## Environment notes
-- Windows box: repo at C:\Users\mnc-9\crypto-quant-desk, venv at .venv (installed,
-  pytest/ruff work). Run: .venv\Scripts\python.exe -m pytest -q
+- Windows box: repo at C:\Users\mnc-9\Documents\crypto-quant-desk (moved 2026-07-09),
+  venv at .venv (Python 3.14.2, PySide6 6.11.1, PySide6-QtAds 5.0.0; installed via
+  `pip install -e ".[dev]"`, pytest/ruff work). Run: .venv\Scripts\python.exe -m pytest -q
+- venv activate scripts still carry the old absolute path (cosmetic); the interpreter and
+  packages work. Recreate the venv only if activation tooling misbehaves.
 - kraken CLI: NO Windows binary exists (v0.3.2, macOS/Linux only) -> REST-primary design.
-- PowerShell gotcha: double quotes inside git commit -m break arg quoting; use -F file.
-
-## Environment notes
-- Windows box: repo at C:\Users\mnc-9\crypto-quant-desk. Package not yet pip-installed here;
-  tests need `pip install -e ".[dev]"` (PySide6 missing locally; 93 non-UI tests pass with
-  PYTHONPATH=src on system Python).
-- kraken CLI: NO Windows binary exists (v0.3.2, macOS/Linux only) -> REST-primary design.
+- PowerShell gotcha: double quotes inside git commit -m break arg quoting; use -F file
+  or a single-quoted here-string.
