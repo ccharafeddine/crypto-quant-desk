@@ -77,3 +77,31 @@ One entry per correction or debugging session. Format: date, what went wrong, th
   os.environ.setdefault("QT_QPA_PLATFORM", "offscreen") so every entry point
   (hook, CI, ad hoc) is headless-deterministic. Rule: pin the Qt platform for
   tests in conftest, don't rely on each caller's environment.
+
+## 2026-07-09 — Expansion E3.1 (QtAds manager accumulation hang)
+
+- Real root cause of the full-suite hang: pytest-qt calls app.processEvents()
+  after every test, and it HANGS once several live CDockManagers have piled up
+  (qtbot only schedules deferred deleteLater, so managers from prior tests stay
+  alive). Importing pyqtgraph into the process (via the chart tests) lowers the
+  threshold - it hung on the 4th manager with pyqtgraph present, vs all 18
+  passing without it. Pinned it with `-v -o faulthandler_timeout`: the exact
+  test where processEvents stalled, after N managers. Fix: a `make_workspace`
+  fixture that shiboken6.delete()s each manager+window on teardown, so at most
+  one CDockManager is alive when processEvents runs. 270 passed, 3x stable.
+  Rule: GUI objects that a native toolkit keeps globally (QtAds managers) must
+  be deleted synchronously per test, not left to qtbot's deferred cleanup.
+- A parallel red herring: repeated `timeout`-killed Qt hangs left half-dead
+  processes that made even previously-green tests flaky for a while; it cleared
+  on its own (no reboot needed - uptime confirmed none happened). Rules: (1)
+  don't kill Qt tests with `timeout` (SIGTERM) in a loop on Windows - each
+  half-dead GUI process degrades the session; use one run with
+  faulthandler_timeout to capture the stack, then stop; (2) transient flakiness
+  can masquerade as environmental - fix the deterministic root cause (here,
+  accumulation) rather than trusting "a reboot fixes it".
+- Codebase convention (re-learned): panels are tested via extracted PURE logic
+  (format_cost_basis, build_risk_view, chart's nearest_candle/format_readout),
+  never by constructing the widget under pytest-qt. Constructing pyqtgraph/QtAds
+  panels in tests is what invites the processEvents hang. Rule: put chart/panel
+  logic in module-level pure functions and test those; verify the rendered
+  widget visually (headless QWidget.grab screenshot), not with a qtbot smoke.

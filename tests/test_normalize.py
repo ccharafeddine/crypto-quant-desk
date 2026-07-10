@@ -8,6 +8,7 @@ shapes; the trades suite covers both the dict and list container variants.
 from cqd.data.normalize import (
     normalize_balance,
     normalize_ohlc,
+    normalize_ohlc_full,
     normalize_ticker,
     normalize_trades,
     slash_symbol,
@@ -109,6 +110,34 @@ def test_normalize_ohlc_ascending() -> None:
     out = normalize_ohlc(scrambled)
     times = [t for t, _ in out]
     assert times == sorted(times)
+
+
+def test_normalize_ohlc_full_maps_ohlcv_and_drops_vwap_count() -> None:
+    out = normalize_ohlc_full(OHLC_RAW)
+    assert len(out) == 3  # "last" cursor dropped
+    first = out[0]
+    # Row is [time, open, high, low, close, vwap, volume, count].
+    assert first.time == 1718150400
+    assert first.open == 67348.6
+    assert first.high == 69969.0
+    assert first.low == 66923.0
+    assert first.close == 68233.7
+    assert first.volume == 1900.5  # index 6, not vwap (index 5)
+    assert isinstance(first.time, int)
+    assert all(
+        isinstance(getattr(first, f), float) for f in ("open", "high", "low", "close", "volume")
+    )
+
+
+def test_normalize_ohlc_full_is_ascending() -> None:
+    scrambled = {"XXBTZUSD": list(reversed(OHLC_RAW["XXBTZUSD"])), "last": 1}
+    out = normalize_ohlc_full(scrambled)
+    times = [c.time for c in out]
+    assert times == sorted(times)
+
+
+def test_normalize_ohlc_full_empty_response() -> None:
+    assert normalize_ohlc_full({"last": 0}) == []
 
 
 # ---------- Balance ----------

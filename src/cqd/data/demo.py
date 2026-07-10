@@ -183,3 +183,6 @@ class DemoClient:
         self, pair: str, *, interval: int = 1440, since: int | None = None
     ) -> list[tuple[int, float]]:
         return await self._client.get_ohlc_closes(pair, interval=interval, since=since)
+
+    async def get_ohlc(self, pair: str, *, interval: int = 1440, since: int | None = None):
+        return await self._client.get_ohlc(pair, interval=interval, since=since)

@@ -28,6 +28,7 @@ from cqd.data.normalize import (
     normalize_balance,
     normalize_ledgers,
     normalize_ohlc,
+    normalize_ohlc_full,
     normalize_ticker,
     normalize_trades,
 )
@@ -202,6 +203,13 @@ class KrakenClient:
             args += ["--since", str(since)]
         raw = await self._run(args, private=False)
         return normalize_ohlc(raw)
+
+    async def get_ohlc(self, pair: str, *, interval: int = 1440, since: int | None = None):
+        args = ["ohlc", pair, "--interval", str(interval)]
+        if since is not None:
+            args += ["--since", str(since)]
+        raw = await self._run(args, private=False)
+        return normalize_ohlc_full(raw)
 
     async def get_trades(
         self, *, start: int | None = None, end: int | None = None

@@ -18,7 +18,7 @@ Engine targets this feeds:
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, NamedTuple
 
 # Explicit alias table for the majors. This is the OFFLINE FALLBACK only; the
 # AUTHORITATIVE classic->bare map will be injected later from `kraken assets` /
@@ -148,23 +148,59 @@ def normalize_ticker(raw: dict[str, Any]) -> dict[str, float]:
     return out
 
 
-def normalize_ohlc(raw: dict[str, Any]) -> list[tuple[int, float]]:
-    """OHLC response -> ascending list of (time:int, close:float) for the pair.
+class Candle(NamedTuple):
+    """One OHLC bar. `time` is the bar's open time in epoch seconds."""
 
-    The CLI returns {classic_pair: [[time, o, h, l, c, vwap, vol, count], ...],
-    "last": cursor}. We drop the "last" pagination cursor and the single pair
-    key, keeping only time and close (index 4). DataFrame assembly is a later,
-    separate step.
+    time: int
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: float
+
+
+def _ohlc_rows(raw: dict[str, Any]) -> list[list[Any]]:
+    """Pull the single pair's candle rows out of an OHLC response.
+
+    Kraken returns {classic_pair: [[time, o, h, l, c, vwap, vol, count], ...],
+    "last": cursor}; we drop the pagination cursor and take the one list value.
     """
-    rows: list[list[Any]] = []
     for key, value in raw.items():
         if key == "last":
             continue
         if isinstance(value, list):
-            rows = value
-            break
-    out = [(int(row[0]), float(row[4])) for row in rows]
+            return value
+    return []
+
+
+def normalize_ohlc(raw: dict[str, Any]) -> list[tuple[int, float]]:
+    """OHLC response -> ascending list of (time:int, close:float) for the pair.
+
+    Keeps only time and close (index 4); DataFrame assembly is a later step.
+    """
+    out = [(int(row[0]), float(row[4])) for row in _ohlc_rows(raw)]
     out.sort(key=lambda r: r[0])
+    return out
+
+
+def normalize_ohlc_full(raw: dict[str, Any]) -> list[Candle]:
+    """OHLC response -> ascending list of `Candle` (full OHLCV for candlesticks).
+
+    Kraken row layout is [time, open, high, low, close, vwap, volume, count];
+    we keep O/H/L/C (1-4) and volume (6), dropping vwap and trade count.
+    """
+    out = [
+        Candle(
+            int(row[0]),
+            float(row[1]),
+            float(row[2]),
+            float(row[3]),
+            float(row[4]),
+            float(row[6]),
+        )
+        for row in _ohlc_rows(raw)
+    ]
+    out.sort(key=lambda c: c.time)
     return out
 
 

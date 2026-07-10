@@ -125,6 +125,7 @@ class MainWindow(QMainWindow):
         self.ticket_panel.order_submitted.connect(self.orders_panel.refresh)
         self.positions_panel.close_requested.connect(self.ticket_panel.prefill_close)
         self.ticket_panel.kraken_pair_selected.connect(self.book_panel.set_pair)
+        self.ticket_panel.kraken_pair_selected.connect(self.chart_panel.set_pair)
 
     def _build_menus(self) -> None:
         menubar = self.menuBar()

@@ -33,10 +33,12 @@ from cqd.data.errors import (
     error_from_api,
 )
 from cqd.data.normalize import (
+    Candle,
     normalize_balance,
     normalize_depth,
     normalize_ledgers,
     normalize_ohlc,
+    normalize_ohlc_full,
     normalize_ticker,
     normalize_trades,
 )
@@ -256,6 +258,17 @@ class KrakenRESTClient:
             params["since"] = since
         raw = await self._public("OHLC", params)
         return normalize_ohlc(raw)
+
+    async def get_ohlc(
+        self, pair: str, *, interval: int = 1440, since: int | None = None
+    ) -> list[Candle]:
+        """Full OHLCV candles for the candlestick chart (vs the closes-only
+        `get_ohlc_closes` the returns/risk math uses)."""
+        params: dict[str, Any] = {"pair": pair, "interval": interval}
+        if since is not None:
+            params["since"] = since
+        raw = await self._public("OHLC", params)
+        return normalize_ohlc_full(raw)
 
     async def get_depth(
         self, pair: str, *, count: int = 25

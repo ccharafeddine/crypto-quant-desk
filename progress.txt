@@ -1,11 +1,9 @@
 # progress.txt — crypto-quant-desk v2 overhaul
 
-Status: Phases 0-5 COMPLETE. Expansion v2.1 in progress: E0 (docs+dep) DONE,
-E1 (docking foundation) DONE, E2 (premium visual system) DONE. E3 (real charts
-+ market microstructure panels) is next.
-Next: E3 candlestick chart panel (replace placeholder), depth-ladder redesign,
-new Watchlist + Time&Sales panels, active-symbol bus. Pending from before:
-Phase 6 (AI analyst), Phase 7 (packaging).
+Status: Phases 0-5 COMPLETE. Expansion v2.1 in progress: E0/E1/E2 DONE.
+E3 (charts + microstructure) in progress: E3.1 candlestick chart DONE.
+Next in E3: E3.2 depth-ladder redesign, E3.3 Watchlist, E3.4 Time&Sales tape,
+E3.5 active-symbol bus. Pending from before: Phase 6 (AI analyst), Phase 7.
 Last session: 2026-07-09
 
 ## Done
@@ -127,6 +125,19 @@ Last session: 2026-07-09
   Analysis/Amber both render cohesive dark cards w/ accent tabs (tofu text is an
   offscreen-font artifact only). 4 new theme tests + 1 workspace theme-apply smoke;
   263 passed, ruff clean.
+
+- 2026-07-09: Expansion v2.1 E3.1 complete (candlestick chart). Data layer: Candle
+  NamedTuple + normalize_ohlc_full (drops vwap/count, keeps OHLCV) in normalize.py;
+  get_ohlc on rest/demo/exchange clients. Chart panel replaces the placeholder:
+  custom CandlestickItem(pg.GraphicsObject) painting bars to a cached QPicture (pg
+  has no candlestick primitive), x-linked volume subplot (BarGraphItem, direction-
+  tinted), 7 timeframe buttons (1m..1W -> Kraken interval minutes), crosshair +
+  mono OHLCV readout, optional set_cost_basis() overlay (wired later by the bus).
+  Follows ticket.kraken_pair_selected (like book). Defaults XBTUSD/1H; loads via
+  QTimer.singleShot after loop starts (ensure_future needs a running loop; _reload
+  also guards get_running_loop for tests). Verified via screenshot: real BTC
+  candles + volume render from Kraken public OHLC. 12 new tests (normalize + pure
+  chart helpers + pytest-qt render smoke). Full suite green, ruff clean.
 
 ## Next
 - E3 (charts + microstructure): candlestick chart panel (pyqtgraph CandlestickItem,

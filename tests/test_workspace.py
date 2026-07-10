@@ -8,6 +8,7 @@ docking foundation is exercised end to end.
 from __future__ import annotations
 
 import pytest
+import shiboken6
 from PySide6.QtCore import QByteArray, QSettings
 from PySide6.QtWidgets import QLabel, QMainWindow
 
@@ -84,37 +85,56 @@ def test_validate_rejects_incomplete_layout() -> None:
 # ------------------------------------------------------------- QtAds round-trip
 
 
-def _make_workspace(qtbot) -> Workspace:
-    win = QMainWindow()
-    qtbot.addWidget(win)
-    ws = Workspace(win)
-    for key in PANEL_KEYS:
-        ws.add_panel(key, key.title(), QLabel(key))
-    return ws
+@pytest.fixture
+def make_workspace(qtbot):
+    """Factory for test workspaces that force-deletes each manager on teardown.
+
+    QtAds CDockManagers left to qtbot's deferred cleanup accumulate across the
+    suite; once a few coexist (which happens sooner when pyqtgraph is also
+    imported into the process), pytest-qt's post-test app.processEvents() hangs
+    on them. Deleting synchronously in teardown keeps at most one manager alive
+    at a time, so processEvents never has a pile to choke on.
+    """
+    created: list[tuple[Workspace, QMainWindow]] = []
+
+    def _factory() -> Workspace:
+        win = QMainWindow()
+        qtbot.addWidget(win)
+        ws = Workspace(win)
+        for key in PANEL_KEYS:
+            ws.add_panel(key, key.title(), QLabel(key))
+        created.append((ws, win))
+        return ws
+
+    yield _factory
+
+    for ws, win in created:
+        shiboken6.delete(ws.manager)
+        shiboken6.delete(win)
 
 
 def _ini(tmp_path, name: str) -> QSettings:
     return QSettings(str(tmp_path / name), QSettings.Format.IniFormat)
 
 
-def test_ensure_presets_creates_all_shipped_perspectives(qtbot, tmp_path) -> None:
-    ws = _make_workspace(qtbot)
+def test_ensure_presets_creates_all_shipped_perspectives(make_workspace, tmp_path) -> None:
+    ws = make_workspace()
     ws.ensure_presets(_ini(tmp_path, "s.ini"))
     assert set(PRESET_NAMES) <= set(ws.perspective_names())
     # Every panel is placed after ensure_presets settles on the default.
     assert set(ws.manager.dockWidgetsMap().keys()) == set(PANEL_KEYS)
 
 
-def test_apply_layout_preserves_all_panels(qtbot, tmp_path) -> None:
-    ws = _make_workspace(qtbot)
+def test_apply_layout_preserves_all_panels(make_workspace, tmp_path) -> None:
+    ws = make_workspace()
     ws.ensure_presets(_ini(tmp_path, "s.ini"))
     for name in PRESET_NAMES:
         ws.apply_layout(name)
         assert set(ws.manager.dockWidgetsMap().keys()) == set(PANEL_KEYS)
 
 
-def test_state_save_restore_roundtrip(qtbot, tmp_path) -> None:
-    ws = _make_workspace(qtbot)
+def test_state_save_restore_roundtrip(make_workspace, tmp_path) -> None:
+    ws = make_workspace()
     ws.ensure_presets(_ini(tmp_path, "s.ini"))
     ws.apply_layout("Analysis")
     settings = _ini(tmp_path, "state.ini")
@@ -125,14 +145,14 @@ def test_state_save_restore_roundtrip(qtbot, tmp_path) -> None:
     assert set(ws.manager.dockWidgetsMap().keys()) == set(PANEL_KEYS)
 
 
-def test_restore_absent_state_returns_false(qtbot, tmp_path) -> None:
-    ws = _make_workspace(qtbot)
+def test_restore_absent_state_returns_false(make_workspace, tmp_path) -> None:
+    ws = make_workspace()
     ws.ensure_presets(_ini(tmp_path, "s.ini"))
     assert ws.restore_state(_ini(tmp_path, "empty.ini")) is False
 
 
-def test_restore_corrupt_state_falls_back_without_crashing(qtbot, tmp_path) -> None:
-    ws = _make_workspace(qtbot)
+def test_restore_corrupt_state_falls_back_without_crashing(make_workspace, tmp_path) -> None:
+    ws = make_workspace()
     ws.ensure_presets(_ini(tmp_path, "s.ini"))
     bad = _ini(tmp_path, "bad.ini")
     bad.setValue(STATE_KEY, QByteArray(b"not a valid layout blob"))
@@ -141,8 +161,8 @@ def test_restore_corrupt_state_falls_back_without_crashing(qtbot, tmp_path) -> N
     assert set(ws.manager.dockWidgetsMap().keys()) == set(PANEL_KEYS)
 
 
-def test_save_and_delete_custom_perspective(qtbot, tmp_path) -> None:
-    ws = _make_workspace(qtbot)
+def test_save_and_delete_custom_perspective(make_workspace, tmp_path) -> None:
+    ws = make_workspace()
     settings = _ini(tmp_path, "s.ini")
     ws.ensure_presets(settings)
     ws.save_perspective("MyView", settings)
@@ -152,18 +172,18 @@ def test_save_and_delete_custom_perspective(qtbot, tmp_path) -> None:
     assert "MyView" not in ws.perspective_names()
 
 
-def test_reset_returns_to_default_with_all_panels(qtbot, tmp_path) -> None:
-    ws = _make_workspace(qtbot)
+def test_reset_returns_to_default_with_all_panels(make_workspace, tmp_path) -> None:
+    ws = make_workspace()
     ws.ensure_presets(_ini(tmp_path, "s.ini"))
     ws.apply_layout("Monitor")
     ws.reset()
     assert set(ws.manager.dockWidgetsMap().keys()) == set(PANEL_KEYS)
 
 
-def test_apply_theme_over_all_themes_does_not_raise(qtbot, tmp_path) -> None:
+def test_apply_theme_over_all_themes_does_not_raise(make_workspace, tmp_path) -> None:
     from cqd.ui.theme import THEMES, build_qtads_qss
 
-    ws = _make_workspace(qtbot)
+    ws = make_workspace()
     ws.ensure_presets(_ini(tmp_path, "s.ini"))
     for theme in THEMES.values():
         ws.apply_theme(build_qtads_qss(theme))
@@ -171,12 +191,8 @@ def test_apply_theme_over_all_themes_does_not_raise(qtbot, tmp_path) -> None:
     assert ws._ads_default_qss in ws.manager.styleSheet()
 
 
-def test_toggle_actions_cover_every_panel(qtbot) -> None:
-    win = QMainWindow()
-    qtbot.addWidget(win)
-    ws = Workspace(win)
-    for key in PANEL_KEYS:
-        ws.add_panel(key, key.title(), QLabel(key))
+def test_toggle_actions_cover_every_panel(make_workspace) -> None:
+    ws = make_workspace()
     actions = ws.toggle_actions()
     assert len(actions) == len(PANEL_KEYS)
     assert [a.text() for a in actions] == [k.title() for k in PANEL_KEYS]
