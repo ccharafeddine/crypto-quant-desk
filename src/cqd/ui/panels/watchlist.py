@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
 
 from cqd.data.errors import KrakenError
 from cqd.data.rest import KrakenRESTClient
+from cqd.ui.format import format_compact
 from cqd.ui.panels.base import Panel
 from cqd.ui.theme import get_theme, load_theme_name
 from cqd.ui.widgets import PanelHeader
@@ -121,7 +122,7 @@ class WatchlistPanel(Panel):
         self.table.cellClicked.connect(self._on_click)
         self._layout.addWidget(self.table, 1)
 
-        self.status = QLabel("")
+        self.status = QLabel("Loading markets…")
         self.status.setProperty("role", "subtitle")
         self._layout.addWidget(self.status)
 
@@ -181,7 +182,7 @@ class WatchlistPanel(Panel):
             pct_item = _cell(f"{pct:+.2f}%")
             pct_item.setForeground(QColor(theme.positive if pct >= 0 else theme.negative))
             self.table.setItem(row, 2, pct_item)
-            self.table.setItem(row, 3, _cell(f"{t.volume:,.4g}"))
+            self.table.setItem(row, 3, _cell(format_compact(t.volume)))
             spark = QTableWidgetItem()
             spark.setData(_SPARK_ROLE, sparks.get(t.symbol, []))
             self.table.setItem(row, 4, spark)

@@ -49,17 +49,23 @@ class TapePanel(Panel):
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self._layout.addWidget(self.table, 1)
 
+        self.status = QLabel("Select a market to see its tape.")
+        self.status.setProperty("role", "subtitle")
+        self._layout.addWidget(self.status)
+
     def set_symbol(self, symbol: str) -> None:
         """Follow the active symbol (WS v2 form). Clears the tape on a change."""
         if symbol and symbol != self._symbol:
             self._symbol = symbol
             self.symbol_label.setText(symbol)
             self.table.setRowCount(0)
+            self.status.setText(f"Waiting for trades on {symbol}…")
 
     def on_trade(self, trade) -> None:
         """Prepend one streamed trade if it's for the active symbol."""
         if self._symbol is None or trade.symbol != self._symbol:
             return
+        self.status.setText("")
         theme = get_theme(load_theme_name())
         color = QColor(theme.positive if trade.side == "buy" else theme.negative)
         self.table.insertRow(0)

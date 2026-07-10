@@ -1,10 +1,12 @@
 # progress.txt — crypto-quant-desk v2 overhaul
 
-Status: Phases 0-5 COMPLETE. Expansion v2.1: E0/E1/E2 DONE, E3 COMPLETE,
-E4 (Bloomberg analytics) COMPLETE (E4a ratios, E4b correlation&exposure,
-E4c attribution, E4d scenario&stress - 4 tabs in the Analytics panel).
-Next: E5 (polish + integration: per-panel states, perspective presets,
-micro-interactions, full regression). Pending: Phase 6 (AI analyst), Phase 7.
+Status: Phases 0-5 COMPLETE. Expansion v2.1 COMPLETE (E0 docs, E1 QtAds
+workspace, E2 premium UI, E3 charts+microstructure, E4 Bloomberg analytics,
+E5 polish). The whole adjustable-workspace + premium-UI + charts + analytics
+overhaul the owner asked for is built, tested, and committed on main.
+Next (owner's call): push the ~14 unpushed commits; or resume the ORIGINAL
+roadmap - Phase 6 (AI analyst, analyst/llm.py Anthropic tool-use) then
+Phase 7 (PyInstaller + Inno Setup Windows packaging).
 Last session: 2026-07-10
 
 ## Done
@@ -238,6 +240,17 @@ Last session: 2026-07-10
   band). Verified via screenshot: fan chart widens over 30d, stress table + DD render.
   4 new tests (scenario_impacts, MC shapes/determinism/flat). 313 passed, ruff clean.
   ANALYTICS SUITE DONE: 4 tabs (Ratios/Exposure/Attribution/Scenario) in one panel.
+
+- 2026-07-10: Expansion v2.1 E5 complete (polish + integration) -> v2.1 DONE.
+  Per-panel state coverage: watchlist "Loading markets…" initial + tape empty/
+  streaming status ("Select a market" / "Waiting for trades on X…" / clears on
+  first trade). New ui/format.py format_compact (1.23M/2.50B/K/T, keeps sign, no
+  sci notation, '—' for non-finite) used for watchlist volume. Full regression
+  316 passed x2 stable; integrated Trading-layout screenshot verified the whole
+  app renders cohesively (watchlist+sparklines / analytics / candlestick+volume /
+  positions / analyst). 3 new format tests. NOTE: E5 was a focused polish pass
+  (states + compact fmt), not an exhaustive state-framework rewrite; chart/book/
+  analytics already carried their own loading/error/empty labels.
 
 ## Next
 - E3 (charts + microstructure): candlestick chart panel (pyqtgraph CandlestickItem,
