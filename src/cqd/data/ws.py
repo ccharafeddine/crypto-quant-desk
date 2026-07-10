@@ -44,6 +44,15 @@ class ExecutionEvent:
     data: dict[str, Any]
 
 
+@dataclass(frozen=True)
+class Trade:
+    symbol: str  # "BTC/USD"
+    price: float
+    qty: float
+    side: str  # "buy" | "sell"
+    timestamp: str  # ISO-8601 from Kraken
+
+
 def parse_message(raw: str | bytes) -> list[object]:
     """One wire frame -> zero or more typed events. Never raises."""
     try:
@@ -64,6 +73,22 @@ def parse_message(raw: str | bytes) -> list[object]:
                 except (TypeError, ValueError):
                     continue
         return out
+    if channel == "trade":
+        trades: list[object] = []
+        for item in msg.get("data") or []:
+            try:
+                trades.append(
+                    Trade(
+                        str(item["symbol"]),
+                        float(item["price"]),
+                        float(item["qty"]),
+                        str(item.get("side", "")),
+                        str(item.get("timestamp", "")),
+                    )
+                )
+            except (KeyError, TypeError, ValueError):
+                continue
+        return trades
     if channel == "executions":
         return [ExecutionEvent(dict(item)) for item in (msg.get("data") or [])]
     # heartbeat / status / method acks reset the watchdog implicitly (any
@@ -100,10 +125,12 @@ class KrakenWSClient:
         self._max_backoff = max_backoff
         self._initial_backoff = initial_backoff
         self._symbols: set[str] = set()
+        self._trade_symbols: set[str] = set()
         self._ws: Any = None
         self._stopping = False
         self._state = "offline"
         self.on_tick: list[Callable[[Tick], None]] = []
+        self.on_trade: list[Callable[[Trade], None]] = []
         self.on_execution: list[Callable[[ExecutionEvent], None]] = []
         self.on_state: list[Callable[[str], None]] = []
 
@@ -129,8 +156,48 @@ class KrakenWSClient:
                 )
             )
 
+    def subscribe_trade(self, symbols: list[str]) -> None:
+        """Add public-trade symbols for the tape; effective now + after reconnect."""
+        new = [s for s in symbols if s not in self._trade_symbols]
+        self._trade_symbols.update(new)
+        if new and self._ws is not None:
+            asyncio.ensure_future(self._send_trade_sub(self._ws, new))
+
+    def unsubscribe_trade(self, symbols: list[str]) -> None:
+        gone = [s for s in symbols if s in self._trade_symbols]
+        self._trade_symbols.difference_update(gone)
+        if gone and self._ws is not None:
+            asyncio.ensure_future(self._send_trade_unsub(self._ws, gone))
+
+    async def _send_trade_sub(self, ws: Any, symbols: list[str]) -> None:
+        if not symbols:
+            return
+        with contextlib.suppress(Exception):
+            await ws.send(
+                json.dumps(
+                    {
+                        "method": "subscribe",
+                        "params": {"channel": "trade", "symbol": sorted(symbols)},
+                    }
+                )
+            )
+
+    async def _send_trade_unsub(self, ws: Any, symbols: list[str]) -> None:
+        if not symbols:
+            return
+        with contextlib.suppress(Exception):
+            await ws.send(
+                json.dumps(
+                    {
+                        "method": "unsubscribe",
+                        "params": {"channel": "trade", "symbol": sorted(symbols)},
+                    }
+                )
+            )
+
     async def _send_subscriptions(self, ws: Any) -> None:
         await self._send_ticker_sub(ws, sorted(self._symbols))
+        await self._send_trade_sub(ws, sorted(self._trade_symbols))
         if self._token_provider is not None:
             token = await self._token_provider()
             await ws.send(
@@ -170,6 +237,8 @@ class KrakenWSClient:
             callbacks: list = []
             if isinstance(event, Tick):
                 callbacks = self.on_tick
+            elif isinstance(event, Trade):
+                callbacks = self.on_trade
             elif isinstance(event, ExecutionEvent):
                 callbacks = self.on_execution
             for cb in callbacks:

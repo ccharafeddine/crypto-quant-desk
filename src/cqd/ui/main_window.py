@@ -35,6 +35,7 @@ from cqd.ui.panels.orders import OrdersPanel
 from cqd.ui.panels.performance import PerformancePanel
 from cqd.ui.panels.positions import PositionsPanel
 from cqd.ui.panels.risk import RiskPanel
+from cqd.ui.panels.tape import TapePanel
 from cqd.ui.panels.ticket import TicketPanel
 from cqd.ui.panels.watchlist import WatchlistPanel
 from cqd.ui.stream import StreamBridge
@@ -101,6 +102,7 @@ class MainWindow(QMainWindow):
         self.performance_panel = PerformancePanel(self)
         self.alerts_panel = AlertsPanel(self)
         self.book_panel = BookPanel(self)
+        self.tape_panel = TapePanel(self)
 
         # Adjustable card workspace (QtAds): register every panel under a stable
         # key, build the shipped perspectives, then restore last session's
@@ -112,6 +114,7 @@ class MainWindow(QMainWindow):
         self.workspace.add_panel("performance", "Performance", self.performance_panel)
         self.workspace.add_panel("chart", "Chart", self.chart_panel)
         self.workspace.add_panel("book", "Depth", self.book_panel)
+        self.workspace.add_panel("tape", "Time & Sales", self.tape_panel)
         self.workspace.add_panel("ticket", "Ticket", self.ticket_panel)
         self.workspace.add_panel("orders", "Orders", self.orders_panel)
         self.workspace.add_panel("alerts", "Alerts", self.alerts_panel)
@@ -129,6 +132,7 @@ class MainWindow(QMainWindow):
         self.positions_panel.close_requested.connect(self.ticket_panel.prefill_close)
         self.ticket_panel.kraken_pair_selected.connect(self.book_panel.set_pair)
         self.ticket_panel.kraken_pair_selected.connect(self.chart_panel.set_pair)
+        self.ticket_panel.pair_selected.connect(self.tape_panel.set_symbol)  # WS "BTC/USD" form
         self.book_panel.price_clicked.connect(self.ticket_panel.set_price)
         # Watchlist selection drives the chart and depth (E3.5 unifies this into
         # a single active-symbol bus that also steers the ticket).
@@ -284,10 +288,13 @@ class MainWindow(QMainWindow):
     def _build_stream(self) -> None:
         self.stream = StreamBridge(self)
         self.stream.tick.connect(self._on_tick)
+        self.stream.trade.connect(self.tape_panel.on_trade)
         self.stream.state_changed.connect(self._on_stream_state)
         self.stream.execution.connect(self._on_execution)
         self.positions_panel.symbols_available.connect(self.stream.ensure_symbols)
         self.ticket_panel.pair_selected.connect(lambda s: self.stream.ensure_symbols([s]))
+        # The tape rides the public trade channel for the selected pair.
+        self.ticket_panel.pair_selected.connect(lambda s: self.stream.ensure_trades([s]))
 
         # Alerts: price rules ride ticks, PnL rules ride the positions feed,
         # drawdown rules ride the performance panel's refresh.

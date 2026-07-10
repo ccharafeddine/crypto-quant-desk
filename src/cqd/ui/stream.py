@@ -17,7 +17,7 @@ from PySide6.QtCore import QObject, Signal
 from cqd.data.client import resolve_demo
 from cqd.data.credentials import kraken_keys_present
 from cqd.data.rest import KrakenRESTClient
-from cqd.data.ws import PRIVATE_WS_URL, ExecutionEvent, KrakenWSClient, Tick
+from cqd.data.ws import PRIVATE_WS_URL, ExecutionEvent, KrakenWSClient, Tick, Trade
 
 _STATE_RANK = {"live": 0, "delayed": 1, "offline": 2}
 
@@ -29,6 +29,7 @@ async def _fetch_ws_token() -> str:
 
 class StreamBridge(QObject):
     tick = Signal(str, float)  # symbol ("BTC/USD"), last price
+    trade = Signal(object)  # one public Trade (for the time & sales tape)
     state_changed = Signal(str)  # "live" | "delayed" | "offline"
     execution = Signal(dict)  # one own-order event (raw v2 payload)
 
@@ -36,6 +37,7 @@ class StreamBridge(QObject):
         super().__init__(parent)
         self._public = KrakenWSClient()
         self._public.on_tick.append(lambda t: self._on_tick(t))
+        self._public.on_trade.append(lambda t: self._on_trade(t))
         self._public.on_state.append(lambda s: self._on_state("public", s))
         self._private: KrakenWSClient | None = None
         self._states = {"public": "offline", "private": "live"}  # private optional
@@ -65,10 +67,20 @@ class StreamBridge(QObject):
         """Subscribe live ticks for `symbols` (idempotent, reconnect-safe)."""
         self._public.subscribe_ticker([s for s in symbols if "/" in s])
 
+    def ensure_trades(self, symbols: list[str]) -> None:
+        """Subscribe the public trade channel for the tape (idempotent)."""
+        self._public.subscribe_trade([s for s in symbols if "/" in s])
+
+    def drop_trades(self, symbols: list[str]) -> None:
+        self._public.unsubscribe_trade([s for s in symbols if "/" in s])
+
     # ---------- fan-out ----------
 
     def _on_tick(self, t: Tick) -> None:
         self.tick.emit(t.symbol, t.last)
+
+    def _on_trade(self, t: Trade) -> None:
+        self.trade.emit(t)
 
     def _on_execution(self, e: ExecutionEvent) -> None:
         self.execution.emit(e.data)

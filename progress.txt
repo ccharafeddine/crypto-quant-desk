@@ -2,9 +2,9 @@
 
 Status: Phases 0-5 COMPLETE. Expansion v2.1 in progress: E0/E1/E2 DONE.
 E3 (charts + microstructure) in progress: E3.1 candlestick DONE, E3.2 depth
-ladder DONE, E3.3 Watchlist DONE.
-Next in E3: E3.4 Time&Sales tape, E3.5 active-symbol bus.
-Pending from before: Phase 6 (AI analyst), Phase 7.
+ladder DONE, E3.3 Watchlist DONE, E3.4 Time&Sales tape DONE.
+Next in E3: E3.5 active-symbol bus (unify chart/book/tape/ticket selection +
+symbol-form conversion). Pending from before: Phase 6 (AI analyst), Phase 7.
 Last session: 2026-07-09
 
 ## Done
@@ -162,6 +162,20 @@ Last session: 2026-07-09
   panel actually appears (else restore leaves it unplaced). Verified via screenshot:
   8 markets w/ colored sparklines, new 10-panel layout replaced the stale 9-panel
   saved state. 8 new tests. 283 passed, ruff clean.
+
+- 2026-07-09: Expansion v2.1 E3.4 complete (Time & Sales tape). WS: Trade dataclass
+  + parse "trade" channel + subscribe_trade/unsubscribe_trade + on_trade + dispatch +
+  resubscribe-on-reconnect in ws.py. StreamBridge: trade=Signal(object), _on_trade,
+  ensure_trades/drop_trades. panels/tape.py: table Time/Price/Size/Side, prepends each
+  trade (newest top, capped 100), price+side colored by side; set_symbol(WS "BTC/USD"
+  form) clears on change; format_trade_time pure helper. Wired ticket.pair_selected ->
+  tape.set_symbol + stream.ensure_trades; stream.trade -> tape.on_trade. Workspace:
+  "tape" added to PANEL_KEYS (11) + all 3 layouts (tabbed by book). Verified: direct
+  WS test got live ticks+trades; screenshot shows tape streaming BTC/USD trades colored
+  by side. SYMBOL FORMS (to reconcile in E3.5): altname XBTUSD (ticket->REST OHLC/Depth),
+  WS v2 BTC/USD (ticket.pair_selected->stream/tape), wsname XBT/USD (watchlist->REST).
+  E3.5 must add a canonical symbol + converters so watchlist selection also drives tape.
+  8 new tests. 288 passed, ruff clean.
 
 ## Next
 - E3 (charts + microstructure): candlestick chart panel (pyqtgraph CandlestickItem,

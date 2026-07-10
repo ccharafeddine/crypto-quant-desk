@@ -3,7 +3,7 @@
 import asyncio
 import json
 
-from cqd.data.ws import ExecutionEvent, KrakenWSClient, Tick, parse_message
+from cqd.data.ws import ExecutionEvent, KrakenWSClient, Tick, Trade, parse_message
 
 # ---------- pure parsing ----------
 
@@ -18,6 +18,43 @@ def test_parse_ticker_update() -> None:
     )
     events = parse_message(raw)
     assert events == [Tick("BTC/USD", 62814.4)]
+
+
+def test_parse_trade_update() -> None:
+    raw = json.dumps(
+        {
+            "channel": "trade",
+            "type": "update",
+            "data": [
+                {
+                    "symbol": "BTC/USD",
+                    "side": "sell",
+                    "price": 62810.1,
+                    "qty": 0.015,
+                    "ord_type": "market",
+                    "trade_id": 42,
+                    "timestamp": "2026-07-09T07:49:37.708706Z",
+                }
+            ],
+        }
+    )
+    events = parse_message(raw)
+    assert events == [Trade("BTC/USD", 62810.1, 0.015, "sell", "2026-07-09T07:49:37.708706Z")]
+
+
+def test_parse_trade_skips_malformed_rows() -> None:
+    raw = json.dumps(
+        {
+            "channel": "trade",
+            "data": [
+                {"symbol": "BTC/USD", "price": "oops", "qty": 1.0},  # bad price -> skipped
+                {"symbol": "ETH/USD", "price": 3000.0, "qty": 2.0, "side": "buy"},
+            ],
+        }
+    )
+    events = parse_message(raw)
+    assert len(events) == 1
+    assert events[0].symbol == "ETH/USD"
 
 
 def test_parse_executions() -> None:
@@ -127,6 +164,30 @@ def test_subscribes_and_dispatches_ticks() -> None:
     assert ticks == [Tick("BTC/USD", 60000.0)]
     assert states[0] == "live"
     assert states[-1] == "offline"  # after stop()
+
+
+def test_subscribes_and_dispatches_trades() -> None:
+    trade_msg = json.dumps(
+        {
+            "channel": "trade",
+            "type": "update",
+            "data": [{"symbol": "BTC/USD", "side": "buy", "price": 60001.0, "qty": 0.2}],
+        }
+    )
+    ws = FakeWS([trade_msg, 10.0])
+    connect, calls = _connector([ws])
+    client = KrakenWSClient(connector=connect, heartbeat_timeout=1.0)
+    client.subscribe_trade(["BTC/USD"])
+
+    trades: list[Trade] = []
+    client.on_trade.append(trades.append)
+
+    _run_briefly(client, 0.2)
+
+    sub = ws.sent[0]
+    assert sub["params"]["channel"] == "trade"
+    assert sub["params"]["symbol"] == ["BTC/USD"]
+    assert trades == [Trade("BTC/USD", 60001.0, 0.2, "buy", "")]
 
 
 def test_silence_goes_delayed_then_reconnects_and_resubscribes() -> None:
