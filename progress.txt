@@ -1,12 +1,14 @@
 # progress.txt — crypto-quant-desk v2 overhaul
 
-Status: Phases 0-5 COMPLETE. Expansion v2.1 COMPLETE (E0 docs, E1 QtAds
-workspace, E2 premium UI, E3 charts+microstructure, E4 Bloomberg analytics,
-E5 polish). The whole adjustable-workspace + premium-UI + charts + analytics
-overhaul the owner asked for is built, tested, and committed on main.
-Next (owner's call): push the ~14 unpushed commits; or resume the ORIGINAL
-roadmap - Phase 6 (AI analyst, analyst/llm.py Anthropic tool-use) then
-Phase 7 (PyInstaller + Inno Setup Windows packaging).
+Status: Phases 0-7 COMPLETE + Expansion v2.1 COMPLETE + macOS cross-platform.
+The app is v2.0.0 (tag pushed): adjustable QtAds workspace, live trading with
+rails, WS streaming, Bloomberg analytics, AI analyst (claude-opus-4-8), and it
+runs on Windows AND macOS. Everything is committed and pushed to origin/main
+(tip b29ff94). 326 tests green, ruff clean, CI + pre-commit hook green.
+Remaining work all needs the OWNER'S machines (I can't do it from here):
+compile the Windows installer (install Inno Setup 6, run ISCC on installer.iss),
+build+test the macOS .app/.dmg on a Mac, and the clean-VM install test.
+Optional/deferred: 6.3 kraken-mcp-via-WSL (never required).
 Last session: 2026-07-10
 
 ## Done
@@ -252,17 +254,70 @@ Last session: 2026-07-10
   (states + compact fmt), not an exhaustive state-framework rewrite; chart/book/
   analytics already carried their own loading/error/empty labels.
 
-## Next
-- E3 (charts + microstructure): candlestick chart panel (pyqtgraph CandlestickItem,
-  timeframe selector, volume subplot, cost-basis/break-even overlays, fill markers)
-  replacing chart.py placeholder; depth-ladder redesign (cumulative colored bars);
-  new Watchlist panel (price/24h%/vol/sparkline) + Time&Sales tape (WS trade channel);
-  active-symbol bus so chart/book/tape/ticket follow one selection.
-- Phase 6 (analyst): 6.1 analyst/llm.py Anthropic tool-use over engine
-  outputs (explicit action only, cost display) -> 6.2 panel actions
-  (commentary / trade review / ask) -> 6.3 optional kraken mcp via WSL.
-- Phase 7: polish pass (states, layout persistence), PyInstaller + Inno Setup
-  Windows installer, clean-VM test, README screenshots, tag v2.0.0.
+- 2026-07-10: Expansion v2.1 (E0-E5) PUSHED to origin (7dd7cc7); CI passed.
+
+- 2026-07-10: Phase 6 (AI analyst) COMPLETE (commit 7fe8f93, pushed). Owner chose
+  model claude-opus-4-8 (over the doc's Sonnet default; TECH_STACK updated) and got
+  their own Anthropic key from console.anthropic.com, saved in Settings. analyst/
+  context.py (PURE grounding: AccountRisk + normalized trades + engine realized PnL
+  -> compact JSON snapshot/trades digest; system prompt forbids inventing numbers;
+  USD sums exclude non-USD quotes; Opus 4.8 pricing + cost line; 6 tests). analyst/
+  llm.py (thin AsyncAnthropic streaming client; key from OS credential store, never
+  logged; explicit button-press only). Analyst panel rewired: Portfolio-commentary /
+  Review-trades / Ask actions, streamed render, per-call cost shown, section hidden
+  without a key. Owner live-verified: commentary streamed + cost shown.
+
+- 2026-07-10: BUG FIX - Kraken "EAPI:Invalid nonce" under the expanded UI (commit
+  eb4b9de, pushed). Many panels each build their own REST client and fire private
+  calls at startup; the nonce counter was monotonic but sends weren't serialized, so
+  concurrent POSTs reached Kraken out of nonce order and losers were rejected. Fix:
+  process-wide asyncio lock in rest._private held across nonce-gen AND send (loop-keyed
+  so tests' asyncio.run get a fresh lock; single qasync app loop keeps it shared).
+  Regression test fires 8 concurrent private calls, asserts one-in-flight in order.
+  Owner verified Positions loads. (NOT a duplicate-instance issue: `python -m cqd`
+  spawns a tiny bootstrap parent + real GUI child = ONE instance.)
+
+- 2026-07-10: Phase 7.3/7.4 (Windows packaging) COMPLETE (commit a85b5b3, pushed).
+  packaging/windows/: cqd.spec (onedir windowed PyInstaller, NO kraken CLI on Windows,
+  collect_all PySide6QtAds/keyring/winotify/certifi/anthropic, theme code-gen so no
+  .qss; BUILT + smoke-verified the real .exe launches clean in demo mode, 194MB),
+  make_icon.py + cqd.ico (candlestick icon drawn with PySide6, no Pillow),
+  version_info.txt, installer.iss (Inno Setup 6, per-user no-admin, uninstall preserves
+  %LOCALAPPDATA%\CryptoQuantDesk + Credential Manager keys). Version bumped to 2.0.0.
+
+- 2026-07-10: Phase 7.6 (README + tag) COMPLETE (commits 09e8f15, ab3864f; tag v2.0.0
+  pushed). README refreshed for v2.0.0; 3 real screenshots (Trading/Analysis/Monitor)
+  captured from the live app under the native platform (crisp fonts) via a demo-mode
+  grab harness, embedded in the README.
+
+- 2026-07-10: Phase 7.1 (state-coverage) COMPLETE (commit 21370a7, pushed). Audit found
+  every network panel showed an error message but NONE had the spec-required Retry
+  button. Added shared widgets.PanelStatus (message + Retry button shown only on error,
+  re-runs panel.refresh(); drop-in for the old QLabel status - setText() still works so
+  loading/ok call sites untouched, error paths -> .error(), clear empties -> .empty()).
+  Retrofitted 10 panels. ticket Retry reloads _load_pairs (its refresh() only reloads
+  the mark); analyst load()-errors get Retry but AI-call errors stay "press again".
+  Fixed 2 raw "Error: {e}" leaks (positions, performance). status_shows_retry() tested.
+
+- 2026-07-10: macOS SUPPORT ADDED - app is now cross-platform (commit b29ff94, pushed).
+  notify.py native macOS notifications via osascript (pure notification_backend()
+  selects winotify/osascript/log); paths.py macOS data dir = ~/Library/Application
+  Support/CryptoQuantDesk (pure resolve_app_data_root; Windows/Linux unchanged - no
+  data relocation); credentials.credential_store_name() used in Settings + docstrings;
+  keyring already picks Keychain on macOS. macOS PyInstaller spec rewritten (drop kraken
+  CLI, collect keyring/QtAds/certifi/anthropic, cqd.icns icon, v2.0.0); make_icon.py
+  also emits cqd.icns; build_dmg.sh -> 2.0.0. Docs (README/packaging README/TECH_STACK/
+  CLAUDE.md) updated Windows-first -> cross-platform. GitHub About/description + 11
+  topics updated via `gh repo edit` (was stale contest text). CANNOT build/test the mac
+  .app from this Windows box (PyInstaller BUNDLE is macOS-only) - owner builds on a Mac.
+
+## Next (all need the owner's machines)
+- Windows installer: install Inno Setup 6, run ISCC on packaging\windows\installer.iss
+  -> dist\installer\crypto-quant-desk-2.0.0-setup.exe. (.iss written but not yet compiled.)
+- macOS build: on a Mac, `pyinstaller packaging/crypto-quant-desk.spec` then
+  `bash packaging/build_dmg.sh`; paste any errors and I'll fix the spec.
+- Phase 7.5 clean-VM test: fresh Windows VM -> install -> keys -> paper order < 5 min.
+- Optional/deferred: 6.3 kraken-mcp-via-WSL (feature-detected, never required).
 
 ## Environment notes
 - Windows box: repo at C:\Users\mnc-9\Documents\crypto-quant-desk (moved 2026-07-09),
