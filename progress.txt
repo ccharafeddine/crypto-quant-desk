@@ -1,9 +1,9 @@
 # progress.txt — crypto-quant-desk v2 overhaul
 
-Status: Phases 0-5 COMPLETE. Expansion v2.1: E0/E1/E2 DONE, E3 (charts +
-microstructure) COMPLETE (E3.1-E3.5 all done).
-Next: E4 (Bloomberg analytics suite: E4a risk&ratios, E4b correlation&exposure,
-E4c attribution, E4d scenario&stress) then E5 polish. Pending from before:
+Status: Phases 0-5 COMPLETE. Expansion v2.1: E0/E1/E2 DONE, E3 COMPLETE.
+E4 (Bloomberg analytics) in progress: E4a risk & ratios DONE.
+Next in E4: E4b correlation&exposure, E4c attribution, E4d scenario&stress
+(each a new tab in the Analytics panel). Then E5 polish. Pending from before:
 Phase 6 (AI analyst), Phase 7 (packaging).
 Last session: 2026-07-09
 
@@ -189,6 +189,18 @@ Last session: 2026-07-09
   chart populate immediately. Verified functionally: one hub.set("ETHUSD") -> chart/
   book ETHUSD, tape ETH/USD, ticket combo ETHUSD, no loop. 5 new tests (parse/forms +
   hub dedupe, hub works w/o QApplication). 293 passed, ruff clean.
+
+- 2026-07-09: Expansion v2.1 E4a complete (risk & ratios). engine/metrics.py: added
+  sortino_ratio (downside dev vs 0, NaN when all-positive), calmar_ratio (ann return /
+  |max dd|), rolling_vol + rolling_sharpe (series), and ratio_summary(returns) -> dict
+  of the 10 headline metrics. New panels/analytics.py: QTabWidget (so E4b-d slot in as
+  tabs) with a Ratios tab = 5-col metric grid computed from the portfolio equity's daily
+  returns (same data path as performance panel), footnoted; pure format_metric helper.
+  Workspace: "analytics" added to PANEL_KEYS (12) + all 3 layouts (tabbed w/ performance).
+  Verified via screenshot: Ratios grid renders. 9 new tests (6 engine ratios + 1
+  ratio_summary + 2 formatter). 300 passed, ruff clean. NOTE: analytics panel uses
+  ensure_future(load()) in __init__ like performance panel (app sets the qasync loop
+  before building MainWindow); never constructed in tests (pure helpers tested instead).
 
 ## Next
 - E3 (charts + microstructure): candlestick chart panel (pyqtgraph CandlestickItem,

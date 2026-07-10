@@ -44,6 +44,7 @@ PANEL_KEYS: tuple[str, ...] = (
     "orders",
     "alerts",
     "analyst",
+    "analytics",
 )
 
 DEFAULT_PERSPECTIVE = "Trading"
@@ -73,6 +74,7 @@ LAYOUTS: dict[str, list[tuple[str, object, str | None]]] = {
         ("orders", _B, "chart"),
         ("alerts", _C, "orders"),
         ("analyst", _C, "orders"),
+        ("analytics", _C, "performance"),
     ],
     # Analysis: performance + risk are the headline; chart drops to a strip,
     # order-entry tucks to the side, watchlist tabs with holdings.
@@ -88,6 +90,7 @@ LAYOUTS: dict[str, list[tuple[str, object, str | None]]] = {
         ("chart", _B, "performance"),
         ("orders", _C, "chart"),
         ("alerts", _C, "chart"),
+        ("analytics", _C, "performance"),
     ],
     # Monitor: passive watching. Watchlist + holdings + orders + alerts
     # dominate; a chart and depth ride the right, entry panels tab away.
@@ -103,6 +106,7 @@ LAYOUTS: dict[str, list[tuple[str, object, str | None]]] = {
         ("performance", _C, "positions"),
         ("ticket", _C, "chart"),
         ("analyst", _C, "orders"),
+        ("analytics", _C, "performance"),
     ],
 }
 

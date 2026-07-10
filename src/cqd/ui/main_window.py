@@ -29,6 +29,7 @@ from cqd.ui.dialogs.settings import SettingsDialog
 from cqd.alerts.notify import send_toast
 from cqd.ui.panels.alerts import AlertsPanel
 from cqd.ui.panels.analyst import AnalystPanel
+from cqd.ui.panels.analytics import AnalyticsPanel
 from cqd.ui.panels.book import BookPanel
 from cqd.ui.panels.chart import ChartPanel
 from cqd.ui.panels.orders import OrdersPanel
@@ -104,6 +105,7 @@ class MainWindow(QMainWindow):
         self.alerts_panel = AlertsPanel(self)
         self.book_panel = BookPanel(self)
         self.tape_panel = TapePanel(self)
+        self.analytics_panel = AnalyticsPanel(self)
 
         # Adjustable card workspace (QtAds): register every panel under a stable
         # key, build the shipped perspectives, then restore last session's
@@ -120,6 +122,7 @@ class MainWindow(QMainWindow):
         self.workspace.add_panel("orders", "Orders", self.orders_panel)
         self.workspace.add_panel("alerts", "Alerts", self.alerts_panel)
         self.workspace.add_panel("analyst", "Analyst", self.analyst_panel)
+        self.workspace.add_panel("analytics", "Analytics", self.analytics_panel)
         self.workspace.ensure_presets(self._settings)
         self.workspace.restore_state(self._settings)
         # Theme the QtAds chrome now that the manager exists (the __init__
@@ -457,6 +460,7 @@ class MainWindow(QMainWindow):
             self.performance_panel,
             self.alerts_panel,
             self.book_panel,
+            self.analytics_panel,
         )
         for panel in panels:
             if hasattr(panel, "refresh"):

@@ -117,3 +117,78 @@ def gain_to_pain(returns: pd.Series) -> float | None:
     if losses >= 0:
         return None
     return float(gains / abs(losses))
+
+
+def sortino_ratio(
+    returns: pd.Series,
+    rf_annual: float = 0.0,
+    periods_per_year: int = PERIODS_PER_YEAR,
+) -> float:
+    """Annualized Sortino ratio: excess return over downside deviation only.
+
+    Downside deviation is the RMS of the negative part of excess returns taken
+    over ALL observations (target-semivariance with target = rf), which is the
+    standard convention and never rewards an all-up sample with an infinite
+    ratio the way dividing by an empty downside set would.
+    """
+    r = returns.dropna()
+    if r.empty:
+        return np.nan
+    excess = r - rf_annual / periods_per_year
+    downside = float(np.sqrt((excess.clip(upper=0.0) ** 2).mean()))
+    if downside == 0 or np.isnan(downside):
+        return np.nan
+    return float(np.sqrt(periods_per_year) * excess.mean() / downside)
+
+
+def calmar_ratio(returns: pd.Series, periods_per_year: int = PERIODS_PER_YEAR) -> float:
+    """Annualized return divided by |max drawdown| of the compounded curve."""
+    r = returns.dropna()
+    if r.empty:
+        return np.nan
+    equity = (1.0 + r).cumprod()
+    mdd = max_drawdown(equity)
+    if mdd == 0 or np.isnan(mdd):
+        return np.nan
+    return float(annualize_return(r, periods_per_year) / abs(mdd))
+
+
+def rolling_vol(
+    returns: pd.Series, window: int = 30, periods_per_year: int = PERIODS_PER_YEAR
+) -> pd.Series:
+    """Annualized rolling volatility (windowed std), as a series."""
+    return returns.rolling(window).std(ddof=1) * np.sqrt(periods_per_year)
+
+
+def rolling_sharpe(
+    returns: pd.Series,
+    window: int = 30,
+    rf_annual: float = 0.0,
+    periods_per_year: int = PERIODS_PER_YEAR,
+) -> pd.Series:
+    """Annualized rolling Sharpe ratio, as a series."""
+    excess = returns - rf_annual / periods_per_year
+    mean = excess.rolling(window).mean()
+    std = excess.rolling(window).std(ddof=1)
+    return np.sqrt(periods_per_year) * mean / std
+
+
+def ratio_summary(returns: pd.Series, rf_annual: float = 0.0) -> dict[str, float]:
+    """All headline risk/return ratios from a periodic return series.
+
+    A single dict so the analytics panel stays a thin view over tested math.
+    """
+    equity = (1.0 + returns.dropna()).cumprod()
+    var95, cvar95 = var_cvar(returns, 0.95)
+    return {
+        "ann_return": annualize_return(returns),
+        "ann_vol": annualize_vol(returns),
+        "ewma_vol": ewma_vol(returns),
+        "sharpe": sharpe_ratio(returns, rf_annual),
+        "sortino": sortino_ratio(returns, rf_annual),
+        "calmar": calmar_ratio(returns),
+        "max_drawdown": max_drawdown(equity),
+        "var_95": var95,
+        "cvar_95": cvar95,
+        "gain_to_pain": gain_to_pain(returns),
+    }

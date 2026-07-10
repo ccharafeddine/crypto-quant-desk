@@ -43,6 +43,46 @@ class TestMetrics:
         assert var95 < 0
         assert cvar95 <= var95
 
+    def test_sortino_ge_sharpe_for_positive_skew(self):
+        # Many small gains, few large losses -> downside dev < total dev, so
+        # Sortino should exceed Sharpe.
+        s = pd.Series([0.01] * 40 + [-0.05] * 4)
+        assert M.sortino_ratio(s) > M.sharpe_ratio(s)
+
+    def test_sortino_all_positive_is_nan(self):
+        # No downside -> undefined (not +inf).
+        assert np.isnan(M.sortino_ratio(pd.Series([0.01, 0.02, 0.03])))
+
+    def test_calmar_is_ann_return_over_maxdd(self):
+        r = pd.Series([0.02, -0.10, 0.05, 0.03, -0.02])
+        equity = (1.0 + r).cumprod()
+        expected = M.annualize_return(r) / abs(M.max_drawdown(equity))
+        assert M.calmar_ratio(r) == pytest.approx(expected, rel=1e-9)
+
+    def test_rolling_vol_and_sharpe_are_series_with_leading_nans(self, rets):
+        rv = M.rolling_vol(rets, window=30)
+        rs = M.rolling_sharpe(rets, window=30)
+        assert isinstance(rv, pd.Series) and isinstance(rs, pd.Series)
+        assert rv.iloc[:29].isna().all()  # window not yet full
+        assert rv.iloc[29:].notna().all()
+
+    def test_ratio_summary_has_all_keys_and_matches_components(self, rets):
+        summ = M.ratio_summary(rets)
+        assert set(summ) == {
+            "ann_return",
+            "ann_vol",
+            "ewma_vol",
+            "sharpe",
+            "sortino",
+            "calmar",
+            "max_drawdown",
+            "var_95",
+            "cvar_95",
+            "gain_to_pain",
+        }
+        assert summ["sharpe"] == pytest.approx(M.sharpe_ratio(rets), rel=1e-9)
+        assert summ["ann_vol"] == pytest.approx(M.annualize_vol(rets), rel=1e-9)
+
 
 class TestConcentration:
     def test_hhi_equal_weights(self):
