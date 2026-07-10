@@ -28,7 +28,7 @@ from cqd.trading.orders import OrderRequest
 from cqd.ui import services
 from cqd.ui.dialogs.order_confirm import OrderConfirmDialog
 from cqd.ui.panels.base import Panel
-from cqd.ui.widgets import Badge, PanelHeader
+from cqd.ui.widgets import Badge, PanelHeader, PanelStatus
 
 _ORDER_TYPE_CHOICES = [
     "market",
@@ -180,8 +180,9 @@ class TicketPanel(Panel):
         self.review_btn.clicked.connect(self._on_review)
         self._layout.addWidget(self.review_btn)
 
-        self.status = QLabel("Loading pairs...")
-        self.status.setProperty("role", "subtitle")
+        self.status = PanelStatus(
+            "Loading pairs...", lambda: asyncio.ensure_future(self._load_pairs())
+        )
         self._layout.addWidget(self.status)
         self._layout.addStretch(1)
 
@@ -195,7 +196,7 @@ class TicketPanel(Panel):
         try:
             self._specs = await services.pair_specs()
         except KrakenError as e:
-            self.status.setText(f"Could not load pairs: {e}")
+            self.status.error(f"Could not load pairs: {e}")
             return
         names = sorted(self._specs)
         self.pair_combo.blockSignals(True)

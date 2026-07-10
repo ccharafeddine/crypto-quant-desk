@@ -26,7 +26,7 @@ from cqd.data.errors import KrakenError
 from cqd.data.rest import KrakenRESTClient
 from cqd.ui.panels.base import Panel
 from cqd.ui.theme import get_theme, load_theme_name
-from cqd.ui.widgets import PanelHeader
+from cqd.ui.widgets import PanelHeader, PanelStatus
 
 _LEVELS = 12
 _POLL_MS = 2500
@@ -110,8 +110,7 @@ class BookPanel(Panel):
         self.bids_table = self._make_table(theme.positive, show_header=False)
         self._layout.addWidget(self.bids_table, 1)
 
-        self.status = QLabel("Waiting for a pair.")
-        self.status.setProperty("role", "subtitle")
+        self.status = PanelStatus("Waiting for a pair.", self.refresh)
         self._layout.addWidget(self.status)
 
         # Best-first price per display row, so a click maps back to its price.
@@ -163,7 +162,7 @@ class BookPanel(Panel):
                 depth = await client.get_depth(pair, count=_LEVELS)
         except KrakenError as e:
             if self._is_current(gen):
-                self.status.setText(f"Depth unavailable: {e}")
+                self.status.error(f"Depth unavailable: {e}")
             return
         if not self._is_current(gen) or pair != self._pair:
             return

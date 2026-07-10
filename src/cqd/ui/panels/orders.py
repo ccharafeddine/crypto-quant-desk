@@ -9,7 +9,6 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
-    QLabel,
     QPushButton,
     QTableWidget,
     QTableWidgetItem,
@@ -22,7 +21,7 @@ from cqd.data.normalize import slash_symbol
 from cqd.data.rest import KrakenRESTClient
 from cqd.ui import services
 from cqd.ui.panels.base import Panel
-from cqd.ui.widgets import PanelHeader
+from cqd.ui.widgets import PanelHeader, PanelStatus
 
 
 @dataclass
@@ -86,8 +85,7 @@ class OrdersPanel(Panel):
         buttons.addStretch(1)
         self._layout.addLayout(buttons)
 
-        self.status = QLabel("Not loaded")
-        self.status.setProperty("role", "subtitle")
+        self.status = PanelStatus("Not loaded", self.refresh)
         self._layout.addWidget(self.status)
 
         asyncio.ensure_future(self.load())
@@ -119,7 +117,12 @@ class OrdersPanel(Panel):
             return
         self._rows = rows
         self._populate()
-        self.status.setText(error or f"{len(rows)} open order(s)")
+        if error:
+            self.status.error(error)
+        elif rows:
+            self.status.setText(f"{len(rows)} open order(s)")
+        else:
+            self.status.empty("No open orders.")
 
     def _populate(self) -> None:
         self.table.clearContents()

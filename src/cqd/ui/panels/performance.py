@@ -33,7 +33,7 @@ from cqd.engine.performance import (
 )
 from cqd.ui.panels.base import Panel
 from cqd.ui.theme import get_theme, load_theme_name
-from cqd.ui.widgets import Badge, PanelHeader
+from cqd.ui.widgets import Badge, PanelHeader, PanelStatus
 
 _FOOTNOTE = (
     "Equity from ledger balances × daily closes (USD-pegged assets at 1.00) · "
@@ -112,8 +112,7 @@ class PerformancePanel(Panel):
         self.footnote.setWordWrap(True)
         self._layout.addWidget(self.footnote)
 
-        self.status = QLabel("Not loaded")
-        self.status.setProperty("role", "subtitle")
+        self.status = PanelStatus("Not loaded", self.refresh)
         self._layout.addWidget(self.status)
 
         asyncio.ensure_future(self.load())
@@ -143,11 +142,11 @@ class PerformancePanel(Panel):
                 marks = await c.get_marks([f"{a}USD" for a in balances if a not in CASH_ASSETS])
         except KrakenAuthError:
             if self._is_current(gen):
-                self.status.setText("Authentication failed. Check File > Settings.")
+                self.status.error("Authentication failed. Check File > Settings.")
             return
         except Exception as e:  # noqa: BLE001
             if self._is_current(gen):
-                self.status.setText(f"Error: {e}")
+                self.status.error(f"Couldn't load performance. ({e})")
             return
         if not self._is_current(gen):
             return

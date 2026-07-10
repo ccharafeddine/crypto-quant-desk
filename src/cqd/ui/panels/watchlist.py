@@ -13,7 +13,6 @@ from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QPen
 from PySide6.QtWidgets import (
     QHeaderView,
-    QLabel,
     QStyledItemDelegate,
     QTableWidget,
     QTableWidgetItem,
@@ -24,7 +23,7 @@ from cqd.data.rest import KrakenRESTClient
 from cqd.ui.format import format_compact
 from cqd.ui.panels.base import Panel
 from cqd.ui.theme import get_theme, load_theme_name
-from cqd.ui.widgets import PanelHeader
+from cqd.ui.widgets import PanelHeader, PanelStatus
 
 # Default markets (Kraken altnames used for the ticker query).
 _PAIRS = ["XBTUSD", "ETHUSD", "SOLUSD", "XRPUSD", "ADAUSD", "DOTUSD", "LINKUSD", "LTCUSD"]
@@ -122,8 +121,7 @@ class WatchlistPanel(Panel):
         self.table.cellClicked.connect(self._on_click)
         self._layout.addWidget(self.table, 1)
 
-        self.status = QLabel("Loading markets…")
-        self.status.setProperty("role", "subtitle")
+        self.status = PanelStatus("Loading markets…", self.refresh)
         self._layout.addWidget(self.status)
 
         self._rows: list[str] = []  # ws pair per table row, for click routing
@@ -162,12 +160,15 @@ class WatchlistPanel(Panel):
                         sparks[t.symbol] = []
         except KrakenError as e:
             if self._is_current(gen):
-                self.status.setText(f"Markets unavailable: {e}")
+                self.status.error(f"Markets unavailable: {e}")
             return
         if not self._is_current(gen):
             return
         self._render(tickers, sparks)
-        self.status.setText("" if tickers else "No market data.")
+        if tickers:
+            self.status.setText("")
+        else:
+            self.status.empty("No market data.")
 
     def _render(self, tickers, sparks) -> None:
         theme = get_theme(load_theme_name())

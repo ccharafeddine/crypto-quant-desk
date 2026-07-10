@@ -13,7 +13,6 @@ from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QBrush, QColor
 from PySide6.QtWidgets import (
     QHeaderView,
-    QLabel,
     QMenu,
     QTableWidget,
     QTableWidgetItem,
@@ -23,7 +22,7 @@ from cqd.data.client import make_client
 from cqd.data.exchange import KrakenClient
 from cqd.engine.cost_basis import CostBasisResult, reconstruct_cost_basis
 from cqd.ui.panels.base import Panel
-from cqd.ui.widgets import PanelHeader
+from cqd.ui.widgets import PanelHeader, PanelStatus
 
 
 def format_cost_basis(cb: CostBasisResult | None) -> tuple[str, str]:
@@ -79,8 +78,7 @@ class PositionsPanel(Panel):
         self.table.customContextMenuRequested.connect(self._on_context_menu)
         self._layout.addWidget(self.table)
 
-        self.status = QLabel("Not loaded")
-        self.status.setProperty("role", "subtitle")
+        self.status = PanelStatus("Not loaded", self.refresh)
         self._layout.addWidget(self.status)
 
         # Auto-load on construction.
@@ -101,7 +99,7 @@ class PositionsPanel(Panel):
             self.status.setText("Loaded")
         except Exception as e:  # noqa: BLE001
             if self._is_current(gen):
-                self.status.setText(f"Error: {e}")
+                self.status.error(f"Couldn't load positions. ({e})")
 
     async def _marks_for_balance(
         self, client: KrakenClient, balances: dict[str, float]

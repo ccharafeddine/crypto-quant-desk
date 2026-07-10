@@ -20,7 +20,7 @@ from cqd.data.normalize import Candle
 from cqd.data.rest import KrakenRESTClient
 from cqd.ui.panels.base import Panel
 from cqd.ui.theme import get_theme, load_theme_name
-from cqd.ui.widgets import PanelHeader
+from cqd.ui.widgets import PanelHeader, PanelStatus
 
 # Timeframe label -> Kraken OHLC interval in minutes (the endpoint's allowed set).
 _TIMEFRAMES: list[tuple[str, int]] = [
@@ -131,8 +131,7 @@ class ChartPanel(Panel):
         self.vol_plot.getAxis("bottom").setTextPen(theme.text_muted)
         self._layout.addWidget(self.vol_plot, 1)
 
-        self.status = QLabel("")
-        self.status.setProperty("role", "subtitle")
+        self.status = PanelStatus("", self.refresh)
         self._layout.addWidget(self.status)
 
         # Crosshair + readout over the price plot.
@@ -221,14 +220,17 @@ class ChartPanel(Panel):
                 candles = await client.get_ohlc(pair, interval=interval)
         except KrakenError as e:
             if self._is_current(gen):
-                self.status.setText(f"Chart unavailable: {e}")
+                self.status.error(f"Chart unavailable: {e}")
             return
         # Drop stale loads (a newer request started, or the pair/interval changed).
         if not self._is_current(gen) or pair != self._pair or interval != self._interval:
             return
         self._candles = candles
         self._render(candles)
-        self.status.setText("" if candles else "No candles for this pair.")
+        if candles:
+            self.status.setText("")
+        else:
+            self.status.empty("No candles for this pair.")
 
     def _render(self, candles: list[Candle]) -> None:
         theme = get_theme(load_theme_name())

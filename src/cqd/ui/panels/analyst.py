@@ -34,7 +34,7 @@ from cqd.data.errors import KrakenAuthError, KrakenError
 from cqd.data.portfolio import EmptyPortfolioError, compute_account_risk
 from cqd.engine.performance import realized_pnl_by_asset, realized_trades
 from cqd.ui.panels.base import Panel
-from cqd.ui.widgets import Badge, PanelHeader
+from cqd.ui.widgets import Badge, PanelHeader, PanelStatus
 
 
 class AnalystPanel(Panel):
@@ -93,8 +93,7 @@ class AnalystPanel(Panel):
         self.cost.setProperty("role", "footnote")
         self._layout.addWidget(self.cost)
 
-        self.status = QLabel("Not loaded")
-        self.status.setProperty("role", "subtitle")
+        self.status = PanelStatus("Not loaded", self.refresh)
         self._layout.addWidget(self.status)
 
         self._ar = None  # last-loaded AccountRisk, reused for commentary/ask
@@ -138,19 +137,19 @@ class AnalystPanel(Panel):
         except EmptyPortfolioError:
             if self._is_current(gen):
                 self._ar = None
-                self.status.setText("No priceable holdings to narrate.")
+                self.status.empty("No priceable holdings to narrate.")
         except KrakenAuthError:
             if self._is_current(gen):
-                self.status.setText(
+                self.status.error(
                     "Authentication failed. Check your Kraken keys in "
                     "File > Settings, or switch to demo data there."
                 )
         except KrakenError as e:
             if self._is_current(gen):
-                self.status.setText(f"Kraken error: {e}")
+                self.status.error(f"Kraken error: {e}")
         except Exception as e:  # noqa: BLE001
             if self._is_current(gen):
-                self.status.setText(f"Error: {e}")
+                self.status.error(f"Couldn't load the analyst. ({e})")
         self._apply_key_state()
 
     def _render(self, narration) -> None:

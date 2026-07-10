@@ -42,7 +42,7 @@ from cqd.engine.risk import correlation_matrix
 from cqd.engine.scenario import monte_carlo_nav, scenario_impacts
 from cqd.ui.panels.base import Panel
 from cqd.ui.theme import get_theme, load_theme_name
-from cqd.ui.widgets import PanelHeader
+from cqd.ui.widgets import PanelHeader, PanelStatus
 
 _RATIO_FOOTNOTE = (
     "365-day annualization · simple returns from daily equity · EWMA vol λ=0.94 · "
@@ -208,8 +208,7 @@ class AnalyticsPanel(Panel):
         self.tabs.addTab(self._build_attribution_tab(), "Attribution")
         self.tabs.addTab(self._build_scenario_tab(), "Scenario")
 
-        self.status = QLabel("Not loaded")
-        self.status.setProperty("role", "subtitle")
+        self.status = PanelStatus("Not loaded", self.refresh)
         self._layout.addWidget(self.status)
 
         asyncio.ensure_future(self.load())
@@ -403,11 +402,11 @@ class AnalyticsPanel(Panel):
                     account_risk = None
         except KrakenAuthError:
             if self._is_current(gen):
-                self.status.setText("Authentication failed. Check File > Settings.")
+                self.status.error("Authentication failed. Check File > Settings.")
             return
         except Exception as e:  # noqa: BLE001
             if self._is_current(gen):
-                self.status.setText(f"Error: {e}")
+                self.status.error(f"Couldn't load analytics. ({e})")
             return
         if not self._is_current(gen):
             return

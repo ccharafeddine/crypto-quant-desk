@@ -27,7 +27,7 @@ from cqd.data.client import make_client
 from cqd.data.errors import KrakenAuthError, KrakenError
 from cqd.data.portfolio import AccountRisk, EmptyPortfolioError, compute_account_risk
 from cqd.ui.panels.base import Panel
-from cqd.ui.widgets import Badge, PanelHeader
+from cqd.ui.widgets import Badge, PanelHeader, PanelStatus
 
 _FOOTNOTE = (
     "Annualized over 365 days · simple returns · beta vs BTC · "
@@ -169,8 +169,7 @@ class RiskPanel(Panel):
         self.footnote_label.setWordWrap(True)
         self._layout.addWidget(self.footnote_label)
 
-        self.status = QLabel("Not loaded")
-        self.status.setProperty("role", "subtitle")
+        self.status = PanelStatus("Not loaded", self.refresh)
         self._layout.addWidget(self.status)
 
         # Auto-load on construction (never blocks the UI thread).
@@ -192,19 +191,21 @@ class RiskPanel(Panel):
             self.status.setText("Loaded")
         except EmptyPortfolioError:
             if self._is_current(gen):
-                self.status.setText("No priceable holdings to compute risk.")
+                self.status.empty(
+                    "No priceable holdings to compute risk. Add funds or check File > Settings."
+                )
         except KrakenAuthError:
             if self._is_current(gen):
-                self.status.setText(
+                self.status.error(
                     "Authentication failed. Check your Kraken keys in "
                     "File > Settings, or switch to demo data there."
                 )
         except KrakenError as e:
             if self._is_current(gen):
-                self.status.setText(f"Kraken error: {e}")
+                self.status.error(f"Kraken error: {e}")
         except Exception as e:  # noqa: BLE001
             if self._is_current(gen):
-                self.status.setText(f"Error: {e}")
+                self.status.error(f"Couldn't load risk. ({e})")
 
     def _render(self, view: RiskView) -> None:
         self.value_label.setText(f"Total value: {view.total_usd_str}")
