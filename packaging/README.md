@@ -1,3 +1,79 @@
+# Packaging
+
+Windows is the primary target (`packaging/windows/`). macOS artifacts
+(`crypto-quant-desk.spec`, `build_dmg.sh`) are kept for the cross-platform build
+and documented further down.
+
+---
+
+# Packaging (Windows)
+
+Produces a per-user installer: `dist/installer/crypto-quant-desk-2.0.0-setup.exe`.
+Two steps, both from the repo root in the project venv (`pip install -e ".[dev]"`
+installs PyInstaller).
+
+## 1. Build the app bundle
+
+```powershell
+pyinstaller packaging\windows\cqd.spec
+```
+
+Output: `dist\crypto-quant-desk\crypto-quant-desk.exe` (onedir). Build artifacts
+(`build/`, `dist/`) are gitignored.
+
+## 2. Build the installer
+
+Needs [Inno Setup 6](https://jrsoftware.org/isdl.php) (`ISCC.exe`):
+
+```powershell
+& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" packaging\windows\installer.iss
+```
+
+Output: `dist\installer\crypto-quant-desk-2.0.0-setup.exe`.
+
+## What the Windows spec does
+
+- **Entry point:** `src/cqd/__main__.py` (`python -m cqd` -> `cqd.app.run()`).
+- **Mode:** `--onedir`, windowed (`console=False`).
+- **No kraken CLI** is bundled: Windows is REST/WebSocket primary and the CLI has
+  no Windows build (it is only ever reached optionally through WSL).
+- **Explicit collection** for the packages PyInstaller's default graph misses:
+  `PySide6QtAds` (compiled docking extension), `keyring` + `keyring.backends.Windows`
+  (Credential Manager), `winotify` (toasts), `certifi` (TLS CA bundle for httpx),
+  and `anthropic`. Qt plugins come from PySide6's built-in hook; `pyqtgraph` is
+  collected as dynamic submodules. The theme is generated in code, so there is no
+  `.qss` data file to ship.
+- **Icon + version resource:** `cqd.ico` and `version_info.txt`. Regenerate the
+  icon (Slate-theme candlesticks, drawn with PySide6, no extra tooling) with
+  `python packaging\windows\make_icon.py`.
+- **No secrets:** `.env` is never bundled. API keys live in Windows Credential
+  Manager; user data lives under `%LOCALAPPDATA%\CryptoQuantDesk`.
+
+## Install / uninstall (Windows, end users)
+
+1. Run the setup `.exe`. It installs **per-user** (no admin) under
+   `%LOCALAPPDATA%\Programs\Crypto Quant Desk`, adds a Start-menu shortcut
+   (desktop shortcut optional), and can launch on finish.
+2. On first run, open **File > Settings** and add your Kraken API keys
+   (read-only: Query Funds/Orders/Trades/Ledger; **never** Withdraw) and,
+   optionally, an Anthropic key for the AI analyst.
+3. To explore with a sample portfolio and no keys, the app defaults to demo data
+   until keys are entered.
+4. **Uninstall** removes only the program files. Your data under
+   `%LOCALAPPDATA%\CryptoQuantDesk` and your keys in Credential Manager are left
+   in place, so a reinstall picks up where you left off.
+
+## Smoke test (Windows)
+
+Run the built exe in demo mode from a console (a clean launch opens the window
+with no traceback and no "could not load the Qt platform plugin" error):
+
+```powershell
+$env:CQD_DATA_SOURCE = "demo"; .\dist\crypto-quant-desk\crypto-quant-desk.exe
+```
+
+---
+
 # Packaging (macOS)
 
 Phase 1 builds a launchable, **unsigned** `.app`. Signing, notarization, and the

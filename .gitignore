@@ -15,6 +15,7 @@ build/
 .ruff_cache/
 .DS_Store
 *.spec
-# Keep the committed PyInstaller spec (reproducible build) despite *.spec above.
+# Keep the committed PyInstaller specs (reproducible builds) despite *.spec above.
 !packaging/crypto-quant-desk.spec
+!packaging/windows/cqd.spec
 ~/.cqd/
