@@ -28,6 +28,16 @@ from cqd.engine import metrics as M
 # ──────────────────────────────────────────────────────────────
 
 
+def correlation_matrix(returns: pd.DataFrame) -> pd.DataFrame:
+    """Pairwise Pearson correlation of asset return columns.
+
+    Columns that are entirely NaN (e.g. an asset whose OHLC fetch failed) are
+    dropped first so they don't poison the matrix with all-NaN rows.
+    """
+    r = returns.dropna(how="all", axis=1)
+    return r.corr()
+
+
 def herfindahl_index(weights: np.ndarray | pd.Series) -> float:
     """HHI: sum of squared weights. 1/N (diversified) → 1.0 (single asset)."""
     w = weights.values if isinstance(weights, pd.Series) else np.asarray(weights)

@@ -10,7 +10,7 @@ The only I/O is via an injected KrakenClient; compute_weights is pure and sync.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import pandas as pd
@@ -36,6 +36,9 @@ class AccountRisk:
     weights: pd.Series
     total_usd: float
     info: dict[str, Any]
+    # Per-asset return frame (for correlation/attribution). Defaults empty so
+    # older constructors (tests) that predate it still work.
+    returns: pd.DataFrame = field(default_factory=pd.DataFrame)
 
 
 def compute_weights(
@@ -131,4 +134,5 @@ async def compute_account_risk(client: Any, *, days: int = 90, min_usd: float = 
         weights=weights,
         total_usd=info["total_usd"],
         info=info,
+        returns=returns,
     )

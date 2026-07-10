@@ -1,10 +1,9 @@
 # progress.txt — crypto-quant-desk v2 overhaul
 
 Status: Phases 0-5 COMPLETE. Expansion v2.1: E0/E1/E2 DONE, E3 COMPLETE.
-E4 (Bloomberg analytics) in progress: E4a risk & ratios DONE.
-Next in E4: E4b correlation&exposure, E4c attribution, E4d scenario&stress
-(each a new tab in the Analytics panel). Then E5 polish. Pending from before:
-Phase 6 (AI analyst), Phase 7 (packaging).
+E4 (Bloomberg analytics) in progress: E4a ratios DONE, E4b correlation&exposure DONE.
+Next in E4: E4c attribution, E4d scenario&stress (new Analytics tabs). Then E5
+polish. Pending from before: Phase 6 (AI analyst), Phase 7 (packaging).
 Last session: 2026-07-09
 
 ## Done
@@ -201,6 +200,20 @@ Last session: 2026-07-09
   ratio_summary + 2 formatter). 300 passed, ruff clean. NOTE: analytics panel uses
   ensure_future(load()) in __init__ like performance panel (app sets the qasync loop
   before building MainWindow); never constructed in tests (pure helpers tested instead).
+
+- 2026-07-09: Expansion v2.1 E4b complete (correlation & exposure). data/sectors.py:
+  static crypto-sector map (L1/L2/DeFi/Meme/Oracle/Payments/Privacy/Cash-Stable/Other)
+  + sector_of + sector_exposure (allowed per TECH_STACK: fixed lookup, no feed).
+  engine/risk.py: correlation_matrix(returns) (drops all-NaN cols). portfolio.py:
+  AccountRisk gained returns:pd.DataFrame (default empty so old ctors work) so the
+  panel gets the return frame for correlation. Analytics panel "Exposure" tab:
+  CorrelationHeatmap widget (custom paint, diverging_color neg<-surface_raised->pos),
+  concentration row (HHI/effective-N/top-3), sector-exposure line, holdings table
+  (asset/weight%/risk-contrib%/sector). load() also runs compute_account_risk (catches
+  EmptyPortfolioError). Verified via screenshot: heatmap (green=positive corr for demo
+  crypto) + tables render. 8 new tests (sectors, correlation_matrix, diverging_color).
+  NOTE deferred to E5/later: allocation-drift-over-time (stacked area) not built;
+  current allocation shown instead. 306 passed, ruff clean.
 
 ## Next
 - E3 (charts + microstructure): candlestick chart panel (pyqtgraph CandlestickItem,

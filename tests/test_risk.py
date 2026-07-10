@@ -66,6 +66,20 @@ class TestMetrics:
         assert rv.iloc[:29].isna().all()  # window not yet full
         assert rv.iloc[29:].notna().all()
 
+    def test_correlation_matrix_is_symmetric_unit_diagonal(self):
+        rng = np.random.default_rng(1)
+        a = pd.Series(rng.normal(0, 0.02, 200))
+        frame = pd.DataFrame({"BTC": a, "ETH": a * 0.9 + rng.normal(0, 0.005, 200)})
+        corr = R.correlation_matrix(frame)
+        assert corr.loc["BTC", "BTC"] == pytest.approx(1.0)
+        assert corr.loc["BTC", "ETH"] == pytest.approx(corr.loc["ETH", "BTC"])
+        assert corr.loc["BTC", "ETH"] > 0.9  # constructed to be highly correlated
+
+    def test_correlation_matrix_drops_all_nan_columns(self):
+        frame = pd.DataFrame({"BTC": [0.01, -0.02, 0.03], "DEAD": [np.nan, np.nan, np.nan]})
+        corr = R.correlation_matrix(frame)
+        assert list(corr.columns) == ["BTC"]
+
     def test_ratio_summary_has_all_keys_and_matches_components(self, rets):
         summ = M.ratio_summary(rets)
         assert set(summ) == {
