@@ -33,6 +33,7 @@ _VALID_AREAS = frozenset({_C, _L, _R, _B, _T})
 # The nine panels of the current app. Keys are the CDockWidget objectNames
 # (stable ids the QtAds save/restore keys off); titles are the tab labels.
 PANEL_KEYS: tuple[str, ...] = (
+    "watchlist",
     "positions",
     "risk",
     "performance",
@@ -47,17 +48,22 @@ PANEL_KEYS: tuple[str, ...] = (
 DEFAULT_PERSPECTIVE = "Trading"
 PRESET_NAMES: tuple[str, ...] = ("Trading", "Analysis", "Monitor")
 
-# QSettings key for the last-session layout blob.
+# QSettings keys for the last-session layout blob and its schema token.
 STATE_KEY = "workspace/state"
+VERSION_KEY = "workspace/panelset"
+# Token that changes whenever the panel set changes, so saved perspectives/state
+# from an older panel set are discarded (else a new panel never gets placed).
+LAYOUT_VERSION = "|".join(PANEL_KEYS)
 
 # Each preset places all nine panels exactly once; every non-first target is a
 # key placed earlier in the same list (enforced by validate_layout + tests).
 LAYOUTS: dict[str, list[tuple[str, object, str | None]]] = {
-    # Trading: chart-centric. Chart center, holdings/risk/perf left, order
-    # entry + depth right, working orders / alerts / analyst along the bottom.
+    # Trading: chart-centric. Watchlist far left, holdings/risk/perf next,
+    # chart center, order entry + depth right, orders/alerts/analyst bottom.
     "Trading": [
         ("chart", _C, None),
         ("positions", _L, "chart"),
+        ("watchlist", _L, "positions"),
         ("risk", _C, "positions"),
         ("performance", _C, "positions"),
         ("ticket", _R, "chart"),
@@ -67,11 +73,12 @@ LAYOUTS: dict[str, list[tuple[str, object, str | None]]] = {
         ("analyst", _C, "orders"),
     ],
     # Analysis: performance + risk are the headline; chart drops to a strip,
-    # order-entry tucks to the side.
+    # order-entry tucks to the side, watchlist tabs with holdings.
     "Analysis": [
         ("performance", _C, None),
         ("risk", _C, "performance"),
         ("positions", _L, "performance"),
+        ("watchlist", _C, "positions"),
         ("book", _C, "positions"),
         ("analyst", _R, "performance"),
         ("ticket", _C, "analyst"),
@@ -79,10 +86,11 @@ LAYOUTS: dict[str, list[tuple[str, object, str | None]]] = {
         ("orders", _C, "chart"),
         ("alerts", _C, "chart"),
     ],
-    # Monitor: passive watching. Holdings + orders + alerts dominate; a chart
-    # and depth ride the right, entry panels stay tabbed away.
+    # Monitor: passive watching. Watchlist + holdings + orders + alerts
+    # dominate; a chart and depth ride the right, entry panels tab away.
     "Monitor": [
-        ("positions", _C, None),
+        ("watchlist", _C, None),
+        ("positions", _R, "watchlist"),
         ("orders", _B, "positions"),
         ("alerts", _C, "orders"),
         ("chart", _R, "positions"),
@@ -180,11 +188,24 @@ class Workspace:
 
     # ---- perspectives ----
 
+    def _panelset_current(self, settings: QSettings) -> bool:
+        return str(settings.value(VERSION_KEY, "")) == LAYOUT_VERSION
+
     def ensure_presets(self, settings: QSettings) -> None:
         """Load saved perspectives, then build any missing shipped preset so
         the three are always available. Leaves the docks in the default
-        arrangement (a later restore_state may override it)."""
+        arrangement (a later restore_state may override it).
+
+        If the saved panel set differs from the current one (a panel was added
+        or removed), stale perspectives are discarded first so the new panel
+        gets placed by a freshly built preset."""
         self.manager.loadPerspectives(settings)
+        if not self._panelset_current(settings):
+            for name in self.perspective_names():
+                self.manager.removePerspective(name)
+            settings.remove(STATE_KEY)
+            settings.setValue(VERSION_KEY, LAYOUT_VERSION)
+            self.manager.savePerspectives(settings)
         existing = set(self.manager.perspectiveNames())
         for name in PRESET_NAMES:
             if name not in existing:
@@ -219,6 +240,8 @@ class Workspace:
         """Restore the last-session arrangement. Returns False (leaving the
         default) on absent or corrupt state, never raising (AC10.2)."""
         try:
+            if not self._panelset_current(settings):
+                return False  # saved layout is for a different panel set
             raw = settings.value(STATE_KEY)
             if raw is None:
                 return False
@@ -231,6 +254,7 @@ class Workspace:
 
     def save_state(self, settings: QSettings) -> None:
         settings.setValue(STATE_KEY, self.manager.saveState())
+        settings.setValue(VERSION_KEY, LAYOUT_VERSION)
         self.manager.savePerspectives(settings)
 
     # ---- theming ----

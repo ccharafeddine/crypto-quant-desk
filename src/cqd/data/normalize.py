@@ -148,6 +148,36 @@ def normalize_ticker(raw: dict[str, Any]) -> dict[str, float]:
     return out
 
 
+class TickerRow(NamedTuple):
+    """A market summary for the watchlist. `open` is the day's opening price;
+    24h % is derived from it in the UI. `volume` is the 24h base volume."""
+
+    symbol: str  # slash form, e.g. "BTC/USD"
+    last: float
+    open: float
+    volume: float
+
+
+def normalize_ticker_full(raw: dict[str, Any]) -> list[TickerRow]:
+    """{classic_pair: ticker_obj} -> list[TickerRow] (last, open, 24h volume).
+
+    Ticker fields: c=[last, lot], o="open" (day), v=[today, 24h] base volume.
+    """
+    out: list[TickerRow] = []
+    for cli_pair, t in raw.items():
+        open_field = t["o"]
+        open_val = float(open_field[0] if isinstance(open_field, list) else open_field)
+        out.append(
+            TickerRow(
+                symbol=slash_symbol(cli_pair),
+                last=float(t["c"][0]),
+                open=open_val,
+                volume=float(t["v"][1]),
+            )
+        )
+    return out
+
+
 class Candle(NamedTuple):
     """One OHLC bar. `time` is the bar's open time in epoch seconds."""
 

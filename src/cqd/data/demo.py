@@ -186,3 +186,6 @@ class DemoClient:
 
     async def get_ohlc(self, pair: str, *, interval: int = 1440, since: int | None = None):
         return await self._client.get_ohlc(pair, interval=interval, since=since)
+
+    async def get_tickers(self, pairs: list[str]):
+        return await self._client.get_tickers(pairs)

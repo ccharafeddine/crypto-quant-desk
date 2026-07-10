@@ -191,6 +191,20 @@ def test_apply_theme_over_all_themes_does_not_raise(make_workspace, tmp_path) ->
     assert ws._ads_default_qss in ws.manager.styleSheet()
 
 
+def test_stale_panelset_discards_saved_state(make_workspace, tmp_path) -> None:
+    # A layout saved under a different panel set must not be restored, so a
+    # newly added panel isn't left unplaced.
+    from cqd.ui.workspace import VERSION_KEY
+
+    ws = make_workspace()
+    settings = _ini(tmp_path, "s.ini")
+    ws.ensure_presets(settings)
+    ws.save_state(settings)
+    assert ws.restore_state(settings) is True  # current panel set restores
+    settings.setValue(VERSION_KEY, "some|older|panelset")
+    assert ws.restore_state(settings) is False  # stale panel set is ignored
+
+
 def test_toggle_actions_cover_every_panel(make_workspace) -> None:
     ws = make_workspace()
     actions = ws.toggle_actions()

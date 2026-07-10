@@ -34,12 +34,14 @@ from cqd.data.errors import (
 )
 from cqd.data.normalize import (
     Candle,
+    TickerRow,
     normalize_balance,
     normalize_depth,
     normalize_ledgers,
     normalize_ohlc,
     normalize_ohlc_full,
     normalize_ticker,
+    normalize_ticker_full,
     normalize_trades,
 )
 from cqd.data.paths import app_data_dir
@@ -246,6 +248,26 @@ class KrakenRESTClient:
                 try:
                     raw = await self._public("Ticker", {"pair": pair})
                     out.update(normalize_ticker(raw))
+                except KrakenAPIError:
+                    continue
+            return out
+
+    async def get_tickers(self, pairs: list[str]) -> list[TickerRow]:
+        """Market summaries (last, open, 24h volume) for the watchlist. Batched
+        into one Ticker call; on an API-reported batch failure (one bad pair
+        fails the batch), retry per pair and skip the bad ones."""
+        if not pairs:
+            return []
+        try:
+            raw = await self._public("Ticker", {"pair": ",".join(pairs)})
+            return normalize_ticker_full(raw)
+        except KrakenAPIError:
+            if len(pairs) == 1:
+                return []
+            out: list[TickerRow] = []
+            for pair in pairs:
+                try:
+                    out.extend(normalize_ticker_full(await self._public("Ticker", {"pair": pair})))
                 except KrakenAPIError:
                     continue
             return out

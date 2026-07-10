@@ -36,6 +36,7 @@ from cqd.ui.panels.performance import PerformancePanel
 from cqd.ui.panels.positions import PositionsPanel
 from cqd.ui.panels.risk import RiskPanel
 from cqd.ui.panels.ticket import TicketPanel
+from cqd.ui.panels.watchlist import WatchlistPanel
 from cqd.ui.stream import StreamBridge
 from cqd.ui.theme import (
     THEMES,
@@ -90,6 +91,7 @@ class MainWindow(QMainWindow):
         self.addToolBar(Qt.ToolBarArea.TopToolBarArea, bar)
 
     def _build_panels(self) -> None:
+        self.watchlist_panel = WatchlistPanel(self)
         self.positions_panel = PositionsPanel(self)
         self.risk_panel = RiskPanel(self)
         self.chart_panel = ChartPanel(self)
@@ -104,6 +106,7 @@ class MainWindow(QMainWindow):
         # key, build the shipped perspectives, then restore last session's
         # arrangement (falling back to the default if none/corrupt).
         self.workspace = Workspace(self)
+        self.workspace.add_panel("watchlist", "Watchlist", self.watchlist_panel)
         self.workspace.add_panel("positions", "Positions", self.positions_panel)
         self.workspace.add_panel("risk", "Risk", self.risk_panel)
         self.workspace.add_panel("performance", "Performance", self.performance_panel)
@@ -127,6 +130,10 @@ class MainWindow(QMainWindow):
         self.ticket_panel.kraken_pair_selected.connect(self.book_panel.set_pair)
         self.ticket_panel.kraken_pair_selected.connect(self.chart_panel.set_pair)
         self.book_panel.price_clicked.connect(self.ticket_panel.set_price)
+        # Watchlist selection drives the chart and depth (E3.5 unifies this into
+        # a single active-symbol bus that also steers the ticket).
+        self.watchlist_panel.pair_selected.connect(self.chart_panel.set_pair)
+        self.watchlist_panel.pair_selected.connect(self.book_panel.set_pair)
 
     def _build_menus(self) -> None:
         menubar = self.menuBar()
@@ -418,6 +425,7 @@ class MainWindow(QMainWindow):
 
     def _refresh_all(self) -> None:
         panels = (
+            self.watchlist_panel,
             self.positions_panel,
             self.risk_panel,
             self.chart_panel,

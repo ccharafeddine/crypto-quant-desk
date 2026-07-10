@@ -10,6 +10,7 @@ from cqd.data.normalize import (
     normalize_ohlc,
     normalize_ohlc_full,
     normalize_ticker,
+    normalize_ticker_full,
     normalize_trades,
     slash_symbol,
     split_pair,
@@ -89,6 +90,16 @@ def test_normalize_ticker_last_price_and_symbol() -> None:
     # Keyed by slash symbol, last = float(c[0]).
     assert out == {"BTC/USD": 70860.0}
     assert isinstance(out["BTC/USD"], float)
+
+
+def test_normalize_ticker_full_last_open_volume() -> None:
+    rows = normalize_ticker_full(TICKER_RAW)
+    assert len(rows) == 1
+    r = rows[0]
+    assert r.symbol == "BTC/USD"
+    assert r.last == 70860.0  # c[0]
+    assert r.open == 71315.5  # o
+    assert r.volume == 2447.04044688  # v[1], the 24h volume (not v[0])
 
 
 # ---------- OHLC ----------

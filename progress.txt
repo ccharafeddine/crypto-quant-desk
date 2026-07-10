@@ -1,9 +1,9 @@
 # progress.txt — crypto-quant-desk v2 overhaul
 
 Status: Phases 0-5 COMPLETE. Expansion v2.1 in progress: E0/E1/E2 DONE.
-E3 (charts + microstructure) in progress: E3.1 candlestick chart DONE,
-E3.2 depth-ladder redesign DONE.
-Next in E3: E3.3 Watchlist, E3.4 Time&Sales tape, E3.5 active-symbol bus.
+E3 (charts + microstructure) in progress: E3.1 candlestick DONE, E3.2 depth
+ladder DONE, E3.3 Watchlist DONE.
+Next in E3: E3.4 Time&Sales tape, E3.5 active-symbol bus.
 Pending from before: Phase 6 (AI analyst), Phase 7.
 Last session: 2026-07-09
 
@@ -149,6 +149,19 @@ Last session: 2026-07-09
   signal -> ticket.set_price() pre-fills the limit price (price only, never side/qty,
   never submits). Pure helpers cumulative_totals + format_spread (5 tests). Verified
   via screenshot: red/green cumulative bars, spread center. 275 passed, ruff clean.
+
+- 2026-07-09: Expansion v2.1 E3.3 complete (Watchlist panel). Data: TickerRow +
+  normalize_ticker_full (last/open/24h-vol) in normalize.py; get_tickers on rest+demo
+  (batched, per-pair retry on batch fail). panels/watchlist.py: table Market/Price/
+  24h%/Volume/sparkline; SparklineDelegate paints a mini line from recent hourly
+  closes stored per cell (sparkline_points pure helper); rows sorted by volume; 24h%
+  colored; row click emits pair_selected(wsname via to_ws_pair BTC->XBT/DOGE->XDG) ->
+  chart+book set_pair. WORKSPACE: added "watchlist" to PANEL_KEYS + all 3 LAYOUTS
+  (10 panels now). Added layout-version invalidation (VERSION_KEY = join(PANEL_KEYS));
+  when the saved panel set differs, stale perspectives+state are discarded so a new
+  panel actually appears (else restore leaves it unplaced). Verified via screenshot:
+  8 markets w/ colored sparklines, new 10-panel layout replaced the stale 9-panel
+  saved state. 8 new tests. 283 passed, ruff clean.
 
 ## Next
 - E3 (charts + microstructure): candlestick chart panel (pyqtgraph CandlestickItem,
