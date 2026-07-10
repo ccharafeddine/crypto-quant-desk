@@ -1,9 +1,10 @@
 # progress.txt — crypto-quant-desk v2 overhaul
 
 Status: Phases 0-5 COMPLETE. Expansion v2.1 in progress: E0/E1/E2 DONE.
-E3 (charts + microstructure) in progress: E3.1 candlestick chart DONE.
-Next in E3: E3.2 depth-ladder redesign, E3.3 Watchlist, E3.4 Time&Sales tape,
-E3.5 active-symbol bus. Pending from before: Phase 6 (AI analyst), Phase 7.
+E3 (charts + microstructure) in progress: E3.1 candlestick chart DONE,
+E3.2 depth-ladder redesign DONE.
+Next in E3: E3.3 Watchlist, E3.4 Time&Sales tape, E3.5 active-symbol bus.
+Pending from before: Phase 6 (AI analyst), Phase 7.
 Last session: 2026-07-09
 
 ## Done
@@ -138,6 +139,16 @@ Last session: 2026-07-09
   also guards get_running_loop for tests). Verified via screenshot: real BTC
   candles + volume render from Kraken public OHLC. 12 new tests (normalize + pure
   chart helpers + pytest-qt render smoke). Full suite green, ruff clean.
+
+- 2026-07-09: Expansion v2.1 E3.2 complete (depth-ladder redesign). book.py rebuilt
+  as a proper ladder: asks table (red) above a centered spread readout, bids table
+  (green) below; each row carries a cumulative-depth bar via DepthBarDelegate (a
+  translucent rect per cell filling its slice of a row-wide bar 0..frac of viewport
+  width, so segments read continuous). Cols Price/Size/Total (cumulative). Best ask
+  at bottom of asks (nearest spread), best bid at top of bids. price_clicked(float)
+  signal -> ticket.set_price() pre-fills the limit price (price only, never side/qty,
+  never submits). Pure helpers cumulative_totals + format_spread (5 tests). Verified
+  via screenshot: red/green cumulative bars, spread center. 275 passed, ruff clean.
 
 ## Next
 - E3 (charts + microstructure): candlestick chart panel (pyqtgraph CandlestickItem,

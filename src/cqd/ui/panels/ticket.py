@@ -269,6 +269,12 @@ class TicketPanel(Panel):
         self.volume_edit.setText(f"{qty:.10f}".rstrip("0").rstrip("."))
         self.problems_label.setText("Review the pre-filled close order, then submit.")
 
+    def set_price(self, price: float) -> None:
+        """Fill the limit-price field from a clicked order-book level (price
+        only; never changes side/qty and never submits)."""
+        if self.price_edit.isVisible():
+            self.price_edit.setText(f"{price:.8g}")
+
     # ---------- submit flow ----------
 
     def refresh_mode_badge(self) -> None:
