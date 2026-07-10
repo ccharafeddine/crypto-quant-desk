@@ -28,8 +28,14 @@ from cqd.data.client import make_client
 from cqd.data.errors import KrakenAuthError, KrakenError
 from cqd.data.portfolio import EmptyPortfolioError, compute_account_risk
 from cqd.data.sectors import sector_exposure, sector_of
-from cqd.engine.metrics import ratio_summary
-from cqd.engine.performance import CASH_ASSETS, build_equity_curve
+from cqd.engine.metrics import annualize_return, ratio_summary
+from cqd.engine.performance import (
+    CASH_ASSETS,
+    build_equity_curve,
+    monthly_return_table,
+    realized_pnl_by_asset,
+    realized_trades,
+)
 from cqd.engine.risk import correlation_matrix
 from cqd.ui.panels.base import Panel
 from cqd.ui.theme import get_theme, load_theme_name
@@ -129,10 +135,63 @@ class CorrelationHeatmap(QWidget):
             )
 
 
+_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+
+class MonthlyReturnsHeatmap(QWidget):
+    """Paints a year x month grid of returns, cells diverging-colored and scaled
+    to the largest absolute monthly move so the extremes read clearly."""
+
+    _MARGIN_L = 44
+    _MARGIN_T = 16
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self._rows: list[tuple[int, list[float]]] = []  # (year, [12 returns])
+        self.setMinimumHeight(70)
+
+    def set_table(self, table) -> None:
+        self._rows = []
+        if table is not None and not table.empty:
+            table = table.reindex(columns=list(range(1, 13)))
+            for year in table.index:
+                self._rows.append((int(year), [float(x) for x in table.loc[year].tolist()]))
+        self.update()
+
+    def paintEvent(self, _event) -> None:  # noqa: N802 - Qt naming
+        if not self._rows:
+            return
+        theme = get_theme(load_theme_name())
+        painter = QPainter(self)
+        neg, mid, pos = QColor(theme.negative), QColor(theme.surface_raised), QColor(theme.positive)
+        scale = max((abs(v) for _y, row in self._rows for v in row if v == v), default=1.0) or 1.0
+        cw = (self.width() - self._MARGIN_L) / 12
+        ch = (self.height() - self._MARGIN_T) / len(self._rows)
+        painter.setPen(QColor(theme.text_muted))
+        for m in range(12):
+            painter.drawText(
+                QRectF(self._MARGIN_L + m * cw, 0, cw, self._MARGIN_T),
+                Qt.AlignmentFlag.AlignCenter,
+                _MONTHS[m][0],
+            )
+        for r, (year, row) in enumerate(self._rows):
+            y = self._MARGIN_T + r * ch
+            painter.setPen(QColor(theme.text_muted))
+            painter.drawText(
+                QRectF(0, y, self._MARGIN_L - 4, ch), Qt.AlignmentFlag.AlignRight, str(year)
+            )
+            for m, v in enumerate(row):
+                if v != v:  # NaN month (no data): leave background
+                    continue
+                color = diverging_color(v / scale, neg, mid, pos)
+                painter.fillRect(QRectF(self._MARGIN_L + m * cw, y, cw - 1, ch - 1), color)
+
+
 class AnalyticsPanel(Panel):
     title = "Analytics"
 
     EXPOSURE_HEADERS = ["Asset", "Weight", "Risk contrib.", "Sector"]
+    ATTRIB_HEADERS = ["Asset", "Realized PnL", "% of total"]
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -143,6 +202,7 @@ class AnalyticsPanel(Panel):
         self._layout.addWidget(self.tabs, 1)
         self.tabs.addTab(self._build_ratios_tab(), "Ratios")
         self.tabs.addTab(self._build_exposure_tab(), "Exposure")
+        self.tabs.addTab(self._build_attribution_tab(), "Attribution")
 
         self.status = QLabel("Not loaded")
         self.status.setProperty("role", "subtitle")
@@ -214,6 +274,54 @@ class AnalyticsPanel(Panel):
         lay.addWidget(self.exposure_table, 2)
         return tab
 
+    def _build_attribution_tab(self) -> QWidget:
+        tab = QWidget()
+        lay = QVBoxLayout(tab)
+        lay.setSpacing(8)
+
+        bench = QGridLayout()
+        bench.setHorizontalSpacing(20)
+        self._attrib_values: dict[str, QLabel] = {}
+        for col, (key, label) in enumerate(
+            [
+                ("realized", "Realized PnL"),
+                ("port_ret", "Portfolio ann."),
+                ("btc_ret", "BTC ann."),
+                ("excess", "Excess vs BTC"),
+            ]
+        ):
+            name = QLabel(label)
+            name.setProperty("role", "metric-label")
+            value = QLabel("—")
+            value.setProperty("role", "metric-value")
+            self._attrib_values[key] = value
+            bench.addWidget(name, 0, col)
+            bench.addWidget(value, 1, col)
+        lay.addLayout(bench)
+
+        heat_title = QLabel("Monthly returns")
+        heat_title.setProperty("role", "metric-label")
+        lay.addWidget(heat_title)
+        self.returns_heatmap = MonthlyReturnsHeatmap()
+        lay.addWidget(self.returns_heatmap, 1)
+
+        self.attrib_table = QTableWidget(0, len(self.ATTRIB_HEADERS))
+        self.attrib_table.setHorizontalHeaderLabels(self.ATTRIB_HEADERS)
+        self.attrib_table.verticalHeader().hide()
+        self.attrib_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.attrib_table.setShowGrid(False)
+        self.attrib_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        lay.addWidget(self.attrib_table, 2)
+
+        foot = QLabel(
+            "Realized PnL from average-cost round trips (USD-quoted only) · "
+            "benchmark: geometric annualized return of the equity curve vs BTC."
+        )
+        foot.setProperty("role", "footnote")
+        foot.setWordWrap(True)
+        lay.addWidget(foot)
+        return tab
+
     # ---------- data ----------
 
     async def load(self) -> None:
@@ -224,6 +332,7 @@ class AnalyticsPanel(Panel):
             async with client as c:
                 ledgers = await c.get_ledgers()
                 balances = await c.get_balance()
+                trades = await c.get_trades()
                 assets = sorted(
                     {str(e["asset"]) for e in ledgers} - CASH_ASSETS
                     | {a for a in balances if a not in CASH_ASSETS}
@@ -253,6 +362,7 @@ class AnalyticsPanel(Panel):
         returns = equity.pct_change().dropna()
         self._render_ratios(ratio_summary(returns))
         self._render_exposure(account_risk)
+        self._render_attribution(trades, equity, returns, account_risk)
         n = len(returns)
         self.status.setText(f"{n} daily returns" if n else "Not enough history for ratios yet.")
 
@@ -294,8 +404,38 @@ class AnalyticsPanel(Panel):
                 row, 3, _cell(sector_of(str(asset)), Qt.AlignmentFlag.AlignLeft)
             )
 
+    def _render_attribution(self, trades, equity, returns, account_risk) -> None:
+        realized = realized_pnl_by_asset(realized_trades(trades))
+        net = sum(realized.values())
+        abs_total = sum(abs(v) for v in realized.values())
+        self._attrib_values["realized"].setText(_fmt_usd(net))
+
+        port_ann = annualize_return(returns)
+        btc_ann = float("nan")
+        if account_risk is not None and "BTC" in getattr(account_risk.returns, "columns", []):
+            btc_ann = annualize_return(account_risk.returns["BTC"])
+        excess = (
+            port_ann - btc_ann if (port_ann == port_ann and btc_ann == btc_ann) else float("nan")
+        )
+        self._attrib_values["port_ret"].setText(format_metric(port_ann, is_percent=True))
+        self._attrib_values["btc_ret"].setText(format_metric(btc_ann, is_percent=True))
+        self._attrib_values["excess"].setText(format_metric(excess, is_percent=True))
+
+        self.returns_heatmap.set_table(monthly_return_table(equity))
+
+        self.attrib_table.setRowCount(len(realized))
+        for row, (asset, pnl) in enumerate(realized.items()):
+            share = f"{pnl / abs_total * 100:.1f}%" if abs_total else "—"
+            self.attrib_table.setItem(row, 0, _cell(str(asset), Qt.AlignmentFlag.AlignLeft))
+            self.attrib_table.setItem(row, 1, _cell(_fmt_usd(pnl)))
+            self.attrib_table.setItem(row, 2, _cell(share))
+
     def refresh(self) -> None:
         asyncio.ensure_future(self.load())
+
+
+def _fmt_usd(x: float) -> str:
+    return "—" if x != x else f"${x:,.2f}"
 
 
 def _cell(text: str, align=Qt.AlignmentFlag.AlignRight) -> QTableWidgetItem:

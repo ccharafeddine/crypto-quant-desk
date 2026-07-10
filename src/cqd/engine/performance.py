@@ -250,6 +250,32 @@ def drawdown_stats(equity: pd.Series) -> dict[str, float]:
     }
 
 
+def realized_pnl_by_asset(round_trips: list[RoundTrip], quote: str = "USD") -> dict[str, float]:
+    """Realized PnL per asset for one quote (USD only by default; non-USD-quoted
+    round trips are skipped, never summed as USD - the known caveat). Sorted by
+    contribution descending."""
+    out: dict[str, float] = {}
+    for rt in round_trips:
+        if rt.quote != quote:
+            continue
+        out[rt.asset] = out.get(rt.asset, 0.0) + rt.pnl
+    return dict(sorted(out.items(), key=lambda kv: kv[1], reverse=True))
+
+
+def monthly_return_table(equity: pd.Series) -> pd.DataFrame:
+    """Monthly returns pivoted to a year x month (1-12) grid, for a heatmap.
+
+    Empty frame when there is no history. Values are simple monthly returns.
+    """
+    monthly = periodic_returns(equity)["monthly"]
+    if monthly.empty:
+        return pd.DataFrame()
+    frame = monthly.to_frame("ret")
+    frame["year"] = frame.index.year
+    frame["month"] = frame.index.month
+    return frame.pivot_table(index="year", columns="month", values="ret")
+
+
 def periodic_returns(equity: pd.Series) -> dict[str, pd.Series]:
     """Daily/weekly/monthly simple returns of the equity curve."""
     if equity.empty:
@@ -268,7 +294,9 @@ __all__ = [
     "balances_over_time",
     "build_equity_curve",
     "drawdown_stats",
+    "monthly_return_table",
     "periodic_returns",
+    "realized_pnl_by_asset",
     "realized_trades",
     "trade_stats",
 ]

@@ -1,9 +1,10 @@
 # progress.txt — crypto-quant-desk v2 overhaul
 
 Status: Phases 0-5 COMPLETE. Expansion v2.1: E0/E1/E2 DONE, E3 COMPLETE.
-E4 (Bloomberg analytics) in progress: E4a ratios DONE, E4b correlation&exposure DONE.
-Next in E4: E4c attribution, E4d scenario&stress (new Analytics tabs). Then E5
-polish. Pending from before: Phase 6 (AI analyst), Phase 7 (packaging).
+E4 (Bloomberg analytics): E4a ratios DONE, E4b correlation&exposure DONE,
+E4c attribution DONE.
+Next in E4: E4d scenario&stress (last analytics tab). Then E5 polish. Pending
+from before: Phase 6 (AI analyst), Phase 7 (packaging).
 Last session: 2026-07-09
 
 ## Done
@@ -214,6 +215,18 @@ Last session: 2026-07-09
   crypto) + tables render. 8 new tests (sectors, correlation_matrix, diverging_color).
   NOTE deferred to E5/later: allocation-drift-over-time (stacked area) not built;
   current allocation shown instead. 306 passed, ruff clean.
+
+- 2026-07-09: Expansion v2.1 E4c complete (attribution). engine/performance.py:
+  realized_pnl_by_asset (per-asset realized PnL, USD-quoted only per caveat, sorted)
+  + monthly_return_table (monthly returns pivoted year x month for a heatmap).
+  Analytics "Attribution" tab: benchmark row (net realized PnL, portfolio ann. return,
+  BTC ann. return via account_risk.returns["BTC"], excess), MonthlyReturnsHeatmap widget
+  (year x month grid, diverging color scaled to max abs move), per-asset realized
+  contribution table (asset/realized$/% of abs total). load() now also fetches trades.
+  Verified via screenshot: green/red monthly heatmap + benchmark + table render.
+  5 new tests (realized_pnl_by_asset, monthly_return_table x2). NOTE: unrealized
+  per-position PnL + NAV curve stay in the Performance panel (not duplicated here).
+  309 passed, ruff clean.
 
 ## Next
 - E3 (charts + microstructure): candlestick chart panel (pyqtgraph CandlestickItem,

@@ -8,7 +8,9 @@ from cqd.engine.performance import (
     balances_over_time,
     build_equity_curve,
     drawdown_stats,
+    monthly_return_table,
     periodic_returns,
+    realized_pnl_by_asset,
     realized_trades,
     trade_stats,
 )
@@ -115,6 +117,35 @@ def test_realized_trades_average_cost_semantics() -> None:
     assert rt.quantity == 0.5
     assert rt.entry_avg == 100.0
     assert rt.pnl == pytest.approx(100.0)  # 0.5 * (300 - 100)
+
+
+def test_realized_pnl_by_asset_groups_usd_only_and_sorts() -> None:
+    trades = [
+        _trade("SOL/USD", "buy", 1.0, 100.0, D1),
+        _trade("SOL/USD", "sell", 1.0, 300.0, D2),  # +200 realized
+        _trade("ADA/USD", "buy", 10.0, 1.0, D1),
+        _trade("ADA/USD", "sell", 10.0, 0.5, D2),  # -5 realized
+        _trade("DOT/BTC", "buy", 10.0, 0.0001, D1),
+        _trade("DOT/BTC", "sell", 10.0, 0.0002, D2),  # BTC-quoted: excluded
+    ]
+    out = realized_pnl_by_asset(realized_trades(trades))
+    assert out == {"SOL": pytest.approx(200.0), "ADA": pytest.approx(-5.0)}
+    assert list(out) == ["SOL", "ADA"]  # sorted by PnL descending
+    assert "DOT" not in out  # non-USD quote skipped
+
+
+def test_monthly_return_table_pivots_year_by_month() -> None:
+    idx = pd.date_range("2025-01-01", periods=120, freq="D")
+    equity = pd.Series(range(100, 220), index=idx, dtype=float)  # steadily rising
+    table = monthly_return_table(equity)
+    assert not table.empty
+    assert table.index.name == "year" and 2025 in table.index
+    # Columns are month numbers; a rising curve gives positive monthly returns.
+    assert (table.loc[2025].dropna() > 0).all()
+
+
+def test_monthly_return_table_empty_history() -> None:
+    assert monthly_return_table(pd.Series(dtype=float)).empty
 
 
 def test_realized_trades_oversell_skipped_and_quotes_separate() -> None:
