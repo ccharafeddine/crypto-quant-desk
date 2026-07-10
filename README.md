@@ -11,6 +11,8 @@ Personal-use software, MIT-licensed. It talks to Kraken's official APIs and
 nothing else: no third-party price feeds, no telemetry, and your API keys never
 leave your machine (they live in Windows Credential Manager, not on disk).
 
+![Crypto Quant Desk — Monitor perspective](docs/screenshots/monitor.png)
+
 ## Status
 
 **v2.0.0** — the core desk is feature-complete: adjustable workspace, live
@@ -48,6 +50,18 @@ structure, implementation plan); session state is tracked in
   own Anthropic key, `claude-opus-4-8`) with portfolio commentary, trade review,
   and free-text Q&A, streamed and priced per call. It narrates engine output and
   never invents numbers
+
+## Screenshots
+
+The workspace ships three saved perspectives (all shown here on demo data).
+
+**Trading** — watchlist, live chart, analytics, and the AI analyst:
+
+![Trading perspective](docs/screenshots/trading.png)
+
+**Analysis** — full ratio panel, order ticket, and alerts:
+
+![Analysis perspective](docs/screenshots/analysis.png)
 
 ## Safety model
 
