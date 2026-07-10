@@ -99,6 +99,21 @@ One entry per correction or debugging session. Format: date, what went wrong, th
   faulthandler_timeout to capture the stack, then stop; (2) transient flakiness
   can masquerade as environmental - fix the deterministic root cause (here,
   accumulation) rather than trusting "a reboot fixes it".
+- Kraken "EAPI:Invalid nonce" under the expanded UI: a monotonic nonce counter
+  is necessary but NOT sufficient. Kraken rejects any nonce <= the highest it has
+  already RECEIVED, and the expansion made many panels (Positions, Risk,
+  Performance, Analytics, Analyst) each build their own client and fire private
+  calls concurrently at startup. The sends weren't serialized, so requests
+  reached Kraken out of nonce order and the losers came back "Invalid nonce".
+  Fix: a process-wide asyncio lock in rest._private held across nonce generation
+  AND the POST, so Kraken sees strictly increasing nonces. The lock is keyed to
+  the running loop (recreated when the loop changes) so each test's asyncio.run()
+  gets a fresh one while the single qasync app loop keeps it shared. Rule: any
+  API that requires an increasing nonce needs the generate-and-send serialized,
+  not just the generator; monotonic generation alone loses to out-of-order
+  delivery. Red herring first suspected: two app instances - but `python -m cqd`
+  spawns a tiny bootstrap parent + the real GUI child (two python.exe, ONE
+  instance), so a 2-process listing is normal, not a duplicate.
 - Codebase convention (re-learned): panels are tested via extracted PURE logic
   (format_cost_basis, build_risk_view, chart's nearest_candle/format_readout),
   never by constructing the widget under pytest-qt. Constructing pyqtgraph/QtAds

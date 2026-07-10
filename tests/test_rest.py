@@ -175,6 +175,57 @@ def test_private_without_keys_raises_auth_before_network() -> None:
         asyncio.run(client.get_balance())
 
 
+class _ConcurrencyProbe(httpx.AsyncBaseTransport):
+    """Records how many private requests are in flight at once and the nonce
+    order in which they arrive, sleeping so overlap is observable if it happens."""
+
+    def __init__(self) -> None:
+        self.in_flight = 0
+        self.max_in_flight = 0
+        self.arrivals: list[int] = []
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        from urllib.parse import parse_qsl
+
+        self.in_flight += 1
+        self.max_in_flight = max(self.max_in_flight, self.in_flight)
+        body = dict(parse_qsl(request.content.decode()))
+        self.arrivals.append(int(body["nonce"]))
+        await asyncio.sleep(0.01)
+        self.in_flight -= 1
+        return httpx.Response(200, json=_envelope({"ZUSD": "1.0"}))
+
+
+def test_concurrent_private_calls_are_serialized_in_nonce_order() -> None:
+    # Regression: many panels each build their own client and fire private calls
+    # at once; without a shared lock they race to Kraken out of nonce order and
+    # the losers come back as EAPI:Invalid nonce. All clients share one nonce
+    # counter here; the process-wide lock must still serialize the sends.
+    import cqd.data.rest as rest
+
+    rest._private_lock = None  # start fresh in this test's event loop
+    probe = _ConcurrencyProbe()
+    shared_nonce = NonceCounter(None)
+
+    async def run() -> None:
+        clients = [
+            KrakenRESTClient(
+                api_key="KEY123", api_secret=_DOC_SECRET, transport=probe, nonce=shared_nonce
+            )
+            for _ in range(8)
+        ]
+        try:
+            await asyncio.gather(*(c.get_balance() for c in clients))
+        finally:
+            for c in clients:
+                await c._http.aclose()
+
+    asyncio.run(run())
+    assert len(probe.arrivals) == 8
+    assert probe.max_in_flight == 1  # never two private requests on the wire at once
+    assert probe.arrivals == sorted(probe.arrivals)  # Kraken sees strictly increasing nonces
+
+
 def test_get_ledgers_normalized() -> None:
     ledger = {
         "ledger": {

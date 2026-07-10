@@ -93,6 +93,29 @@ class NonceCounter:
         return n
 
 
+_private_lock: asyncio.Lock | None = None
+_private_lock_loop: object | None = None
+
+
+def _get_private_lock() -> asyncio.Lock:
+    """One process-wide lock serializing private requests.
+
+    A monotonic nonce is necessary but not sufficient: Kraken rejects any nonce
+    <= the highest it has already RECEIVED, so if concurrent private POSTs (each
+    from its own panel/client) arrive out of order, the lower nonces come back as
+    'EAPI:Invalid nonce'. Holding this lock across nonce generation AND the send
+    guarantees Kraken sees nonces in increasing order. The lock is re-created when
+    the running loop changes so each test's asyncio.run() gets a fresh one; the
+    app runs a single qasync loop for its whole life, so it stays shared there.
+    """
+    global _private_lock, _private_lock_loop
+    loop = asyncio.get_running_loop()
+    if _private_lock is None or _private_lock_loop is not loop:
+        _private_lock = asyncio.Lock()
+        _private_lock_loop = loop
+    return _private_lock
+
+
 _shared_nonce: NonceCounter | None = None
 
 
@@ -213,15 +236,19 @@ class KrakenRESTClient:
         if self._nonce is None:
             self._nonce = _get_shared_nonce()
         path = f"/0/private/{endpoint}"
-        nonce = str(self._nonce.next())
-        payload = {"nonce": nonce, **(data or {})}
-        post_data = urllib.parse.urlencode(payload)
-        headers = {
-            "API-Key": self._api_key,
-            "API-Sign": sign_request(self._api_secret, path, nonce, post_data),
-            "Content-Type": "application/x-www-form-urlencoded",
-        }
-        return await self._request("POST", path, data=payload, headers=headers)
+        # Serialize nonce generation AND the send: Kraken must receive nonces in
+        # increasing order, so concurrent private calls from different panels
+        # cannot be allowed to race past each other on the wire.
+        async with _get_private_lock():
+            nonce = str(self._nonce.next())
+            payload = {"nonce": nonce, **(data or {})}
+            post_data = urllib.parse.urlencode(payload)
+            headers = {
+                "API-Key": self._api_key,
+                "API-Sign": sign_request(self._api_secret, path, nonce, post_data),
+                "Content-Type": "application/x-www-form-urlencoded",
+            }
+            return await self._request("POST", path, data=payload, headers=headers)
 
     # ---------- public API (engine-shaped via the normalizer) ----------
 
