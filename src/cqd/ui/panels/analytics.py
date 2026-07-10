@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 
+import pyqtgraph as pg
 from PySide6.QtCore import QRectF, Qt
 from PySide6.QtGui import QColor, QPainter
 from PySide6.QtWidgets import (
@@ -32,11 +33,13 @@ from cqd.engine.metrics import annualize_return, ratio_summary
 from cqd.engine.performance import (
     CASH_ASSETS,
     build_equity_curve,
+    drawdown_stats,
     monthly_return_table,
     realized_pnl_by_asset,
     realized_trades,
 )
 from cqd.engine.risk import correlation_matrix
+from cqd.engine.scenario import monte_carlo_nav, scenario_impacts
 from cqd.ui.panels.base import Panel
 from cqd.ui.theme import get_theme, load_theme_name
 from cqd.ui.widgets import PanelHeader
@@ -203,6 +206,7 @@ class AnalyticsPanel(Panel):
         self.tabs.addTab(self._build_ratios_tab(), "Ratios")
         self.tabs.addTab(self._build_exposure_tab(), "Exposure")
         self.tabs.addTab(self._build_attribution_tab(), "Attribution")
+        self.tabs.addTab(self._build_scenario_tab(), "Scenario")
 
         self.status = QLabel("Not loaded")
         self.status.setProperty("role", "subtitle")
@@ -322,6 +326,56 @@ class AnalyticsPanel(Panel):
         lay.addWidget(foot)
         return tab
 
+    def _build_scenario_tab(self) -> QWidget:
+        tab = QWidget()
+        lay = QVBoxLayout(tab)
+        lay.setSpacing(8)
+
+        dd = QGridLayout()
+        dd.setHorizontalSpacing(20)
+        self._dd_values: dict[str, QLabel] = {}
+        for col, (key, label) in enumerate(
+            [
+                ("max_drawdown", "Max drawdown"),
+                ("current_drawdown", "Current DD"),
+                ("underwater_days", "Underwater"),
+                ("max_underwater_days", "Longest UW"),
+            ]
+        ):
+            name = QLabel(label)
+            name.setProperty("role", "metric-label")
+            value = QLabel("—")
+            value.setProperty("role", "metric-value")
+            self._dd_values[key] = value
+            dd.addWidget(name, 0, col)
+            dd.addWidget(value, 1, col)
+        lay.addLayout(dd)
+
+        stress_title = QLabel("Historical stress (BTC shock -> portfolio, via book beta)")
+        stress_title.setProperty("role", "metric-label")
+        lay.addWidget(stress_title)
+        self.stress_table = QTableWidget(0, 2)
+        self.stress_table.setHorizontalHeaderLabels(["BTC shock", "Portfolio impact"])
+        self.stress_table.verticalHeader().hide()
+        self.stress_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.stress_table.setShowGrid(False)
+        self.stress_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.stress_table.setMaximumHeight(230)
+        lay.addWidget(self.stress_table)
+
+        mc_title = QLabel("Monte Carlo NAV (30d · median with 5–95% band)")
+        mc_title.setProperty("role", "metric-label")
+        lay.addWidget(mc_title)
+        theme = get_theme(load_theme_name())
+        self.mc_plot = pg.PlotWidget()
+        self.mc_plot.setBackground(theme.surface)
+        self.mc_plot.showGrid(x=True, y=True, alpha=0.12)
+        self.mc_plot.getAxis("left").setTextPen(theme.text_muted)
+        self.mc_plot.getAxis("bottom").setTextPen(theme.text_muted)
+        self.mc_plot.setMinimumHeight(130)
+        lay.addWidget(self.mc_plot, 1)
+        return tab
+
     # ---------- data ----------
 
     async def load(self) -> None:
@@ -363,6 +417,7 @@ class AnalyticsPanel(Panel):
         self._render_ratios(ratio_summary(returns))
         self._render_exposure(account_risk)
         self._render_attribution(trades, equity, returns, account_risk)
+        self._render_scenario(equity, returns, account_risk)
         n = len(returns)
         self.status.setText(f"{n} daily returns" if n else "Not enough history for ratios yet.")
 
@@ -429,6 +484,39 @@ class AnalyticsPanel(Panel):
             self.attrib_table.setItem(row, 0, _cell(str(asset), Qt.AlignmentFlag.AlignLeft))
             self.attrib_table.setItem(row, 1, _cell(_fmt_usd(pnl)))
             self.attrib_table.setItem(row, 2, _cell(share))
+
+    def _render_scenario(self, equity, returns, account_risk) -> None:
+        theme = get_theme(load_theme_name())
+        dd = drawdown_stats(equity)
+        self._dd_values["max_drawdown"].setText(format_metric(dd["max_drawdown"], is_percent=True))
+        self._dd_values["current_drawdown"].setText(
+            format_metric(dd["current_drawdown"], is_percent=True)
+        )
+        self._dd_values["underwater_days"].setText(f"{dd['underwater_days']}d")
+        self._dd_values["max_underwater_days"].setText(f"{dd['max_underwater_days']}d")
+
+        beta = account_risk.risk.book_beta_btc if account_risk is not None else float("nan")
+        impacts = scenario_impacts(beta) if beta == beta else {}
+        shocks = sorted(impacts)
+        self.stress_table.setRowCount(len(shocks))
+        for row, shock in enumerate(shocks):
+            imp = impacts[shock]
+            self.stress_table.setItem(
+                row, 0, _cell(f"{shock * 100:+.0f}%", Qt.AlignmentFlag.AlignLeft)
+            )
+            imp_item = _cell(format_metric(imp, is_percent=True))
+            imp_item.setForeground(QColor(theme.positive if imp >= 0 else theme.negative))
+            self.stress_table.setItem(row, 1, imp_item)
+
+        self.mc_plot.clear()
+        p5, p50, p95 = monte_carlo_nav(returns, horizon=30)
+        x = list(range(len(p50)))
+        lo = self.mc_plot.plot(x, p5, pen=pg.mkPen(theme.accent, width=1))
+        hi = self.mc_plot.plot(x, p95, pen=pg.mkPen(theme.accent, width=1))
+        band = QColor(theme.accent)
+        band.setAlphaF(0.18)
+        self.mc_plot.addItem(pg.FillBetweenItem(lo, hi, brush=band))
+        self.mc_plot.plot(x, p50, pen=pg.mkPen(theme.accent, width=2))
 
     def refresh(self) -> None:
         asyncio.ensure_future(self.load())
