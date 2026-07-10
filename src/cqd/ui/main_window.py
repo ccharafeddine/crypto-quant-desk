@@ -39,6 +39,7 @@ from cqd.ui.panels.tape import TapePanel
 from cqd.ui.panels.ticket import TicketPanel
 from cqd.ui.panels.watchlist import WatchlistPanel
 from cqd.ui.stream import StreamBridge
+from cqd.ui.symbol_hub import SymbolHub
 from cqd.ui.theme import (
     THEMES,
     build_qss,
@@ -126,18 +127,31 @@ class MainWindow(QMainWindow):
         self.workspace.apply_theme(build_qtads_qss(get_theme(self._theme_name)))
 
         # Trading flows: submissions refresh open orders; Positions "Close"
-        # pre-fills the ticket (never auto-submits); the depth ladder follows
-        # the ticket's pair.
+        # pre-fills the ticket (never auto-submits); a clicked depth level
+        # pre-fills the ticket price.
         self.ticket_panel.order_submitted.connect(self.orders_panel.refresh)
         self.positions_panel.close_requested.connect(self.ticket_panel.prefill_close)
-        self.ticket_panel.kraken_pair_selected.connect(self.book_panel.set_pair)
-        self.ticket_panel.kraken_pair_selected.connect(self.chart_panel.set_pair)
-        self.ticket_panel.pair_selected.connect(self.tape_panel.set_symbol)  # WS "BTC/USD" form
         self.book_panel.price_clicked.connect(self.ticket_panel.set_price)
-        # Watchlist selection drives the chart and depth (E3.5 unifies this into
-        # a single active-symbol bus that also steers the ticket).
-        self.watchlist_panel.pair_selected.connect(self.chart_panel.set_pair)
-        self.watchlist_panel.pair_selected.connect(self.book_panel.set_pair)
+
+        # Active-symbol bus: the watchlist and the ticket are the two selection
+        # sources; the hub normalizes and fans one change out to every panel
+        # (and, once built, the stream). An unchanged symbol is swallowed, so
+        # the ticket -> hub -> ticket path can't loop.
+        self.symbol_hub = SymbolHub(self)
+        self.watchlist_panel.pair_selected.connect(self.symbol_hub.set)
+        self.ticket_panel.pair_selected.connect(self.symbol_hub.set)
+        self.symbol_hub.changed.connect(self._on_symbol)
+
+    def _on_symbol(self, symbol) -> None:
+        """Fan one active-symbol change out to every consumer in its own form."""
+        self.chart_panel.set_pair(symbol.rest)
+        self.book_panel.set_pair(symbol.rest)
+        self.tape_panel.set_symbol(symbol.ws)
+        self.ticket_panel.set_pair(symbol.rest)
+        stream = getattr(self, "stream", None)
+        if stream is not None:
+            stream.ensure_symbols([symbol.ws])
+            stream.ensure_trades([symbol.ws])
 
     def _build_menus(self) -> None:
         menubar = self.menuBar()
@@ -292,9 +306,10 @@ class MainWindow(QMainWindow):
         self.stream.state_changed.connect(self._on_stream_state)
         self.stream.execution.connect(self._on_execution)
         self.positions_panel.symbols_available.connect(self.stream.ensure_symbols)
-        self.ticket_panel.pair_selected.connect(lambda s: self.stream.ensure_symbols([s]))
-        # The tape rides the public trade channel for the selected pair.
-        self.ticket_panel.pair_selected.connect(lambda s: self.stream.ensure_trades([s]))
+        # Stream subscriptions for the active symbol are driven by the symbol
+        # bus (_on_symbol); seed a default so the book/tape/chart populate on
+        # launch without waiting for the first selection.
+        QTimer.singleShot(0, lambda: self.symbol_hub.set("XBTUSD"))
 
         # Alerts: price rules ride ticks, PnL rules ride the positions feed,
         # drawdown rules ride the performance panel's refresh.

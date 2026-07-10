@@ -275,6 +275,12 @@ class TicketPanel(Panel):
         if self.price_edit.isVisible():
             self.price_edit.setText(f"{price:.8g}")
 
+    def set_pair(self, altname: str) -> None:
+        """Point the ticket at a pair by Kraken altname, driven by the symbol
+        bus. A no-op if the altname isn't a tradable pair in the combo."""
+        if altname and altname != self.pair_combo.currentText():
+            self.pair_combo.setCurrentText(altname)
+
     # ---------- submit flow ----------
 
     def refresh_mode_badge(self) -> None:

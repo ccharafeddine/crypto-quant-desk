@@ -1,10 +1,10 @@
 # progress.txt — crypto-quant-desk v2 overhaul
 
-Status: Phases 0-5 COMPLETE. Expansion v2.1 in progress: E0/E1/E2 DONE.
-E3 (charts + microstructure) in progress: E3.1 candlestick DONE, E3.2 depth
-ladder DONE, E3.3 Watchlist DONE, E3.4 Time&Sales tape DONE.
-Next in E3: E3.5 active-symbol bus (unify chart/book/tape/ticket selection +
-symbol-form conversion). Pending from before: Phase 6 (AI analyst), Phase 7.
+Status: Phases 0-5 COMPLETE. Expansion v2.1: E0/E1/E2 DONE, E3 (charts +
+microstructure) COMPLETE (E3.1-E3.5 all done).
+Next: E4 (Bloomberg analytics suite: E4a risk&ratios, E4b correlation&exposure,
+E4c attribution, E4d scenario&stress) then E5 polish. Pending from before:
+Phase 6 (AI analyst), Phase 7 (packaging).
 Last session: 2026-07-09
 
 ## Done
@@ -176,6 +176,19 @@ Last session: 2026-07-09
   WS v2 BTC/USD (ticket.pair_selected->stream/tape), wsname XBT/USD (watchlist->REST).
   E3.5 must add a canonical symbol + converters so watchlist selection also drives tape.
   8 new tests. 288 passed, ruff clean.
+
+- 2026-07-09: Expansion v2.1 E3.5 complete (active-symbol bus) -> E3 COMPLETE.
+  data/symbols.py: Symbol(base,quote) canonical + parse_symbol (accepts BTC/USD,
+  XBT/USD, XBTUSD, BTCUSD) + .ws ("BTC/USD") / .rest ("XBTUSD", base->XBT/XDG) /
+  .display. ui/symbol_hub.py: SymbolHub(QObject) changed=Signal(Symbol), set()
+  parses + dedupes (swallows unchanged so ticket->hub->ticket can't loop). main_window
+  _on_symbol fans one change to chart(rest)/book(rest)/tape(ws)/ticket(rest) +
+  stream.ensure_symbols/ensure_trades(ws). Sources: watchlist.pair_selected +
+  ticket.pair_selected -> hub.set. Removed the old scattered direct wirings. ticket
+  gained set_pair(altname). Default XBTUSD seeded on launch (singleShot) so book/tape/
+  chart populate immediately. Verified functionally: one hub.set("ETHUSD") -> chart/
+  book ETHUSD, tape ETH/USD, ticket combo ETHUSD, no loop. 5 new tests (parse/forms +
+  hub dedupe, hub works w/o QApplication). 293 passed, ruff clean.
 
 ## Next
 - E3 (charts + microstructure): candlestick chart panel (pyqtgraph CandlestickItem,
