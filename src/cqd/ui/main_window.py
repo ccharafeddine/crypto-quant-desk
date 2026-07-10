@@ -5,11 +5,10 @@ from __future__ import annotations
 import os
 from datetime import datetime
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QSettings, QTimer
 from PySide6.QtGui import QAction, QActionGroup
 from PySide6.QtWidgets import (
     QApplication,
-    QDockWidget,
     QHBoxLayout,
     QInputDialog,
     QLabel,
@@ -40,6 +39,7 @@ from cqd.ui.panels.ticket import TicketPanel
 from cqd.ui.stream import StreamBridge
 from cqd.ui.theme import THEMES, build_qss, get_theme, load_theme_name, save_theme_name
 from cqd.ui.widgets import Badge
+from cqd.ui.workspace import PRESET_NAMES, Workspace
 
 
 class MainWindow(QMainWindow):
@@ -51,12 +51,9 @@ class MainWindow(QMainWindow):
         )
         self.resize(1600, 1000)
 
+        self._settings = QSettings("crypto-quant-desk", "cqd")
         self._theme_name = load_theme_name()
         self._apply_theme(self._theme_name)
-
-        # Fixed cockpit regions: no animation, no detaching. Panels carry their
-        # own headers (native dock chrome is removed in _add_dock).
-        self.setDockOptions(QMainWindow.DockOption.AllowNestedDocks)
 
         self._build_header()
         self._build_panels()
@@ -96,27 +93,21 @@ class MainWindow(QMainWindow):
         self.alerts_panel = AlertsPanel(self)
         self.book_panel = BookPanel(self)
 
-        left = Qt.DockWidgetArea.LeftDockWidgetArea
-        right = Qt.DockWidgetArea.RightDockWidgetArea
-        bottom = Qt.DockWidgetArea.BottomDockWidgetArea
-        d_positions = self._add_dock(self.positions_panel, "Positions", left)
-        d_perf = self._add_dock(self.performance_panel, "Performance", left)
-        self._add_dock(self.risk_panel, "Risk", right)
-        d_chart = self._add_dock(self.chart_panel, "Chart", right)
-        d_ticket = self._add_dock(self.ticket_panel, "Ticket", right)
-        d_book = self._add_dock(self.book_panel, "Depth", right)
-        d_analyst = self._add_dock(self.analyst_panel, "Analyst", bottom)
-        d_orders = self._add_dock(self.orders_panel, "Orders", bottom)
-        d_alerts = self._add_dock(self.alerts_panel, "Alerts", bottom)
-        # Stack related panels as tabs so the default layout stays readable.
-        self.tabifyDockWidget(d_positions, d_perf)
-        self.tabifyDockWidget(d_chart, d_ticket)
-        self.tabifyDockWidget(d_ticket, d_book)
-        self.tabifyDockWidget(d_analyst, d_orders)
-        self.tabifyDockWidget(d_orders, d_alerts)
-        d_positions.raise_()
-        d_ticket.raise_()
-        d_orders.raise_()
+        # Adjustable card workspace (QtAds): register every panel under a stable
+        # key, build the shipped perspectives, then restore last session's
+        # arrangement (falling back to the default if none/corrupt).
+        self.workspace = Workspace(self)
+        self.workspace.add_panel("positions", "Positions", self.positions_panel)
+        self.workspace.add_panel("risk", "Risk", self.risk_panel)
+        self.workspace.add_panel("performance", "Performance", self.performance_panel)
+        self.workspace.add_panel("chart", "Chart", self.chart_panel)
+        self.workspace.add_panel("book", "Depth", self.book_panel)
+        self.workspace.add_panel("ticket", "Ticket", self.ticket_panel)
+        self.workspace.add_panel("orders", "Orders", self.orders_panel)
+        self.workspace.add_panel("alerts", "Alerts", self.alerts_panel)
+        self.workspace.add_panel("analyst", "Analyst", self.analyst_panel)
+        self.workspace.ensure_presets(self._settings)
+        self.workspace.restore_state(self._settings)
 
         # Trading flows: submissions refresh open orders; Positions "Close"
         # pre-fills the ticket (never auto-submits); the depth ladder follows
@@ -124,17 +115,6 @@ class MainWindow(QMainWindow):
         self.ticket_panel.order_submitted.connect(self.orders_panel.refresh)
         self.positions_panel.close_requested.connect(self.ticket_panel.prefill_close)
         self.ticket_panel.kraken_pair_selected.connect(self.book_panel.set_pair)
-
-    def _add_dock(self, widget, title: str, area: Qt.DockWidgetArea) -> QDockWidget:
-        dock = QDockWidget(title, self)
-        dock.setObjectName(f"dock_{title.lower()}")
-        dock.setWidget(widget)
-        # Fixed region: no close/float/move chrome, and remove the native title
-        # bar entirely (an empty title-bar widget) since the panel has its own.
-        dock.setFeatures(QDockWidget.DockWidgetFeature.NoDockWidgetFeatures)
-        dock.setTitleBarWidget(QWidget())
-        self.addDockWidget(area, dock)
-        return dock
 
     def _build_menus(self) -> None:
         menubar = self.menuBar()
@@ -164,11 +144,81 @@ class MainWindow(QMainWindow):
         trading_menu.addAction(cancel_all_action)
 
         view_menu: QMenu = menubar.addMenu("&View")
-        for dock in self.findChildren(QDockWidget):
-            view_menu.addAction(dock.toggleViewAction())
+        panels_menu: QMenu = view_menu.addMenu("Panels")
+        for action in self.workspace.toggle_actions():
+            panels_menu.addAction(action)
+
+        self._persp_menu: QMenu = view_menu.addMenu("Perspectives")
+        self._rebuild_perspectives_menu()
+        self.workspace.manager.perspectiveListChanged.connect(self._rebuild_perspectives_menu)
+
+        reset_action = QAction("Reset layout", self)
+        reset_action.triggered.connect(self._on_reset_layout)
+        view_menu.addAction(reset_action)
 
         view_menu.addSeparator()
         self._build_theme_menu(view_menu)
+
+    # ---------- workspace: perspectives + layout ----------
+
+    def _rebuild_perspectives_menu(self) -> None:
+        menu = self._persp_menu
+        menu.clear()
+        for name in self.workspace.perspective_names():
+            action = QAction(name, self)
+            action.triggered.connect(
+                lambda _checked=False, n=name: self.workspace.open_perspective(n)
+            )
+            menu.addAction(action)
+        menu.addSeparator()
+        save_action = QAction("Save perspective...", self)
+        save_action.triggered.connect(self._on_save_perspective)
+        menu.addAction(save_action)
+        delete_action = QAction("Delete perspective...", self)
+        delete_action.triggered.connect(self._on_delete_perspective)
+        menu.addAction(delete_action)
+
+    def _on_save_perspective(self) -> None:
+        name, ok = QInputDialog.getText(self, "Save perspective", "Name:")
+        name = name.strip()
+        if not ok or not name:
+            return
+        if name in PRESET_NAMES:
+            QMessageBox.warning(
+                self,
+                "Reserved name",
+                f'"{name}" is a built-in preset. Choose a different name.',
+            )
+            return
+        self.workspace.save_perspective(name, self._settings)
+        self.statusBar().showMessage(f'Saved perspective "{name}"', 3000)
+
+    def _on_delete_perspective(self) -> None:
+        custom = self.workspace.custom_perspectives()
+        if not custom:
+            QMessageBox.information(
+                self,
+                "No custom perspectives",
+                "Only your own saved perspectives can be deleted; the built-in presets stay.",
+            )
+            return
+        name, ok = QInputDialog.getItem(
+            self, "Delete perspective", "Perspective:", custom, 0, False
+        )
+        if not ok or not name:
+            return
+        self.workspace.delete_perspective(name, self._settings)
+        self.statusBar().showMessage(f'Deleted perspective "{name}"', 3000)
+
+    def _on_reset_layout(self) -> None:
+        confirm = QMessageBox.question(
+            self,
+            "Reset layout",
+            "Restore the default panel arrangement?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if confirm == QMessageBox.StandardButton.Yes:
+            self.workspace.reset()
 
     def _build_theme_menu(self, view_menu: QMenu) -> None:
         theme_menu: QMenu = view_menu.addMenu("Theme")
@@ -271,6 +321,9 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(f"Order {exec_type}: {order_id}", 4000)
 
     def closeEvent(self, event) -> None:  # noqa: N802 - Qt naming
+        # Persist the current arrangement (and any saved perspectives) so the
+        # next launch reopens exactly as the user left it.
+        self.workspace.save_state(self._settings)
         self.stream.stop()
         super().closeEvent(event)
 

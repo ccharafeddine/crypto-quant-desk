@@ -43,3 +43,30 @@ One entry per correction or debugging session. Format: date, what went wrong, th
   clipped illegible by default padding inside a table row. Rule: components
   embedded in nonstandard containers (table cells, headers) need their own
   compact style variant, checked visually at real row heights.
+
+## 2026-07-09 — Expansion E1 (QtAds docking)
+
+- Shiboken deleted the CDockManager out from under live Python objects
+  ("Internal C++ object already deleted") because the wrapper held the manager
+  but not its parent QMainWindow; the host was GC'd, taking the C++ child with
+  it. Rule: a Python object that owns a Qt child must keep a strong reference to
+  the parent that owns it in C++.
+- Verify a third-party Qt binding's API by introspection before coding to it,
+  not from C++ docs: the bound `CDockWidget(title, parent)` ctor is deprecated
+  (use `CDockWidget(manager, title)`), and `moveDockWidget` does not exist -
+  rearranging is removeDockWidget + re-add (widget contents survive). Rule:
+  `dir()`/smoke-test the actual installed bindings first.
+- New third-party dep on a bleeding-edge interpreter: confirm real
+  installability, not just PyPI presence. PySide6-QtAds ships abi3 wheels
+  (cp312-abi3 installs on 3.14) but hard-pins PySide6-Essentials to one 6.x, so
+  PySide6 and QtAds must move in lockstep. Rule: actually install + import a new
+  dep in the target venv before committing it to TECH_STACK.
+- A green sub-run can hide a full-suite segfault: test_workspace.py passed
+  alone (17/17) but the FULL suite exited 139 (access violation) in pytest-qt's
+  _process_events. Cause: QtAds FocusHighlighting installs an app-global
+  CDockFocusController event filter per CDockManager; the tests build many
+  managers, and stale filters over torn-down ones crash qApp.processEvents()
+  once enough accumulate. Fix: leave FocusHighlighting off (style the active
+  card via QtAds' own active-tab CSS in E2). Rule: for a native-GUI change,
+  the gate is the FULL suite exit code, not a passing subset - segfaults are
+  state/count dependent and only show at scale.

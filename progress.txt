@@ -1,10 +1,10 @@
 # progress.txt — crypto-quant-desk v2 overhaul
 
-Status: Phases 0-5 COMPLETE. New initiative started: Expansion v2.1
-(adjustable QtAds workspace + premium UI + Bloomberg analytics). E0 (docs+dep)
-DONE; E1 (docking foundation) is next.
-Next: E1 QtAds workspace host in main_window.py (see IMPLEMENTATION_PLAN
-"Expansion v2.1"). Pending from before: Phase 6 (AI analyst), Phase 7 (packaging).
+Status: Phases 0-5 COMPLETE. Expansion v2.1 in progress: E0 (docs+dep) DONE,
+E1 (docking foundation) DONE. E2 (premium visual system) is next.
+Next: E2 ui-architect audit -> card chrome + QtAds tab/title/splitter styling
+via theme tokens, per-panel header controls, elevation tokens. Pending from
+before: Phase 6 (AI analyst), Phase 7 (packaging).
 Last session: 2026-07-09
 
 ## Done
@@ -99,10 +99,25 @@ Last session: 2026-07-09
   candlestick/depth-ladder/heatmap chart specs), IMPLEMENTATION_PLAN (Expansion E0-E5).
   242 tests green, ruff clean.
 
+- 2026-07-09: Expansion v2.1 E1 complete (docking foundation). New src/cqd/ui/
+  workspace.py: Workspace wraps QtAds CDockManager; every panel a CDockWidget
+  (float/tab/split/resize). Pure layout specs (LAYOUTS + validate_layout) for 3
+  presets Trading/Analysis/Monitor, each places all 9 panels once. Save/restore
+  arrangement to QSettings (corrupt/absent -> default, never crashes, AC10.2);
+  ensure_presets builds missing presets; save/open/delete named perspectives.
+  main_window.py: dropped fixed-dock cockpit (NoDockWidgetFeatures/_add_dock);
+  View menu -> Panels toggles + Perspectives submenu + Reset layout; closeEvent
+  persists layout. All signal wiring preserved. QtAds API notes: CDockWidget(mgr,
+  title) is the non-deprecated ctor; no moveDockWidget (rebuild via removeDockWidget
+  + re-add, widget content survives); Workspace holds a strong ref to host or the
+  C++ manager gets GC'd. 17 new tests (test_workspace.py, pure + pytest-qt round
+  trip). Full suite green, ruff clean.
+
 ## Next
-- E1 (docking foundation): CDockManager workspace host in main_window.py; wrap each
-  Panel as a CDockWidget (float/tab/split/resize); save/restore layout to QSettings;
-  perspectives (Trading/Analysis/Monitor) + Reset layout; preserve all signal wiring.
+- E2 (premium visual system): ui-architect audit; card chrome + elevation tokens;
+  QtAds tab/title/splitter styling through theme tokens; per-panel header controls
+  (symbol/timeframe/gear) via extended PanelHeader; reconcile doc token names with
+  the Theme dataclass.
 - Phase 6 (analyst): 6.1 analyst/llm.py Anthropic tool-use over engine
   outputs (explicit action only, cost display) -> 6.2 panel actions
   (commentary / trade review / ask) -> 6.3 optional kraken mcp via WSL.
