@@ -40,3 +40,8 @@ class PanelHeader(QWidget):
     def add_left(self, widget: QWidget) -> None:
         """Insert a widget just after the title (left-aligned, before stretch)."""
         self._lay.insertWidget(1, widget)
+
+    def add_right(self, widget: QWidget) -> None:
+        """Append a widget on the right of the header (after the stretch), where
+        per-panel controls live (symbol/timeframe selectors, a settings gear)."""
+        self._lay.addWidget(widget)

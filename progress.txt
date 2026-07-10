@@ -1,10 +1,11 @@
 # progress.txt — crypto-quant-desk v2 overhaul
 
 Status: Phases 0-5 COMPLETE. Expansion v2.1 in progress: E0 (docs+dep) DONE,
-E1 (docking foundation) DONE. E2 (premium visual system) is next.
-Next: E2 ui-architect audit -> card chrome + QtAds tab/title/splitter styling
-via theme tokens, per-panel header controls, elevation tokens. Pending from
-before: Phase 6 (AI analyst), Phase 7 (packaging).
+E1 (docking foundation) DONE, E2 (premium visual system) DONE. E3 (real charts
++ market microstructure panels) is next.
+Next: E3 candlestick chart panel (replace placeholder), depth-ladder redesign,
+new Watchlist + Time&Sales panels, active-symbol bus. Pending from before:
+Phase 6 (AI analyst), Phase 7 (packaging).
 Last session: 2026-07-09
 
 ## Done
@@ -113,11 +114,26 @@ Last session: 2026-07-09
   C++ manager gets GC'd. 17 new tests (test_workspace.py, pure + pytest-qt round
   trip). Full suite green, ruff clean.
 
+- 2026-07-09: Expansion v2.1 E2 complete (premium visual system). Theme dataclass
+  gained the elevation ramp (surface_raised, elevated, border_strong); app QSS lifts
+  chrome onto it (menubar/header/status/table-headers/buttons); panel-title restyled
+  as a slim uppercase eyebrow (de-competes with the QtAds tab). New build_qtads_qss()
+  themes the dock chrome (container/area/tabs/titlebar/splitter/floating) from the
+  same tokens, layered over QtAds' shipped default so button icons survive; active
+  tab carries the accent edge, recolors live on theme switch. Workspace.apply_theme()
+  + main_window wires it on init and _on_theme_selected. PanelHeader.add_right() for
+  future per-panel controls (E3). FRONTEND_GUIDELINES token table reconciled to the
+  real dataclass. Verified via headless QWidget.grab() screenshots: Trading/Slate and
+  Analysis/Amber both render cohesive dark cards w/ accent tabs (tofu text is an
+  offscreen-font artifact only). 4 new theme tests + 1 workspace theme-apply smoke;
+  263 passed, ruff clean.
+
 ## Next
-- E2 (premium visual system): ui-architect audit; card chrome + elevation tokens;
-  QtAds tab/title/splitter styling through theme tokens; per-panel header controls
-  (symbol/timeframe/gear) via extended PanelHeader; reconcile doc token names with
-  the Theme dataclass.
+- E3 (charts + microstructure): candlestick chart panel (pyqtgraph CandlestickItem,
+  timeframe selector, volume subplot, cost-basis/break-even overlays, fill markers)
+  replacing chart.py placeholder; depth-ladder redesign (cumulative colored bars);
+  new Watchlist panel (price/24h%/vol/sparkline) + Time&Sales tape (WS trade channel);
+  active-symbol bus so chart/book/tape/ticket follow one selection.
 - Phase 6 (analyst): 6.1 analyst/llm.py Anthropic tool-use over engine
   outputs (explicit action only, cost display) -> 6.2 panel actions
   (commentary / trade review / ask) -> 6.3 optional kraken mcp via WSL.

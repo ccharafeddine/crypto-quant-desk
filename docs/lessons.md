@@ -70,3 +70,10 @@ One entry per correction or debugging session. Format: date, what went wrong, th
   card via QtAds' own active-tab CSS in E2). Rule: for a native-GUI change,
   the gate is the FULL suite exit code, not a passing subset - segfaults are
   state/count dependent and only show at scale.
+- The same suite passed under offscreen but the pre-commit hook (which runs
+  pytest with no QT_QPA_PLATFORM) segfaulted on the native Windows platform,
+  blocking the commit while CI (offscreen) was green. The hook and CI must run
+  Qt tests the same way. Fix: tests/conftest.py does
+  os.environ.setdefault("QT_QPA_PLATFORM", "offscreen") so every entry point
+  (hook, CI, ad hoc) is headless-deterministic. Rule: pin the Qt platform for
+  tests in conftest, don't rely on each caller's environment.

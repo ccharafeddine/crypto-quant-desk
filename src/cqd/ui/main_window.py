@@ -37,7 +37,14 @@ from cqd.ui.panels.positions import PositionsPanel
 from cqd.ui.panels.risk import RiskPanel
 from cqd.ui.panels.ticket import TicketPanel
 from cqd.ui.stream import StreamBridge
-from cqd.ui.theme import THEMES, build_qss, get_theme, load_theme_name, save_theme_name
+from cqd.ui.theme import (
+    THEMES,
+    build_qss,
+    build_qtads_qss,
+    get_theme,
+    load_theme_name,
+    save_theme_name,
+)
 from cqd.ui.widgets import Badge
 from cqd.ui.workspace import PRESET_NAMES, Workspace
 
@@ -108,6 +115,9 @@ class MainWindow(QMainWindow):
         self.workspace.add_panel("analyst", "Analyst", self.analyst_panel)
         self.workspace.ensure_presets(self._settings)
         self.workspace.restore_state(self._settings)
+        # Theme the QtAds chrome now that the manager exists (the __init__
+        # _apply_theme ran before the workspace did).
+        self.workspace.apply_theme(build_qtads_qss(get_theme(self._theme_name)))
 
         # Trading flows: submissions refresh open orders; Positions "Close"
         # pre-fills the ticket (never auto-submits); the depth ladder follows
@@ -237,9 +247,15 @@ class MainWindow(QMainWindow):
         save_theme_name(name)
 
     def _apply_theme(self, name: str) -> None:
+        theme = get_theme(name)
         app = QApplication.instance()
         if app is not None:
-            app.setStyleSheet(build_qss(get_theme(name)))
+            app.setStyleSheet(build_qss(theme))
+        # The QtAds chrome carries its own stylesheet; theme it too (guarded so
+        # the initial call in __init__, before the workspace exists, is a no-op).
+        workspace = getattr(self, "workspace", None)
+        if workspace is not None:
+            workspace.apply_theme(build_qtads_qss(theme))
 
     def _build_status_bar(self) -> None:
         bar = QStatusBar(self)

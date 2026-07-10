@@ -160,6 +160,17 @@ def test_reset_returns_to_default_with_all_panels(qtbot, tmp_path) -> None:
     assert set(ws.manager.dockWidgetsMap().keys()) == set(PANEL_KEYS)
 
 
+def test_apply_theme_over_all_themes_does_not_raise(qtbot, tmp_path) -> None:
+    from cqd.ui.theme import THEMES, build_qtads_qss
+
+    ws = _make_workspace(qtbot)
+    ws.ensure_presets(_ini(tmp_path, "s.ini"))
+    for theme in THEMES.values():
+        ws.apply_theme(build_qtads_qss(theme))
+    # The shipped default (with the button icons) stays layered underneath ours.
+    assert ws._ads_default_qss in ws.manager.styleSheet()
+
+
 def test_toggle_actions_cover_every_panel(qtbot) -> None:
     win = QMainWindow()
     qtbot.addWidget(win)

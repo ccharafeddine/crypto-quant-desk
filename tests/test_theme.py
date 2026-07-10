@@ -5,6 +5,7 @@ from cqd.ui.theme import (
     THEMES,
     Theme,
     build_qss,
+    build_qtads_qss,
     default_theme,
     get_theme,
 )
@@ -47,3 +48,26 @@ def test_themes_share_base_differ_only_by_accent() -> None:
     assert len(accents) == 3  # distinct accents
     bases = {(t.bg, t.surface, t.border, t.text) for t in THEMES.values()}
     assert len(bases) == 1  # one shared base
+
+
+def test_elevation_ramp_is_a_distinct_ordered_set() -> None:
+    # The four-step canvas ramp must be four different values so cards read.
+    t = default_theme()
+    ramp = [t.bg, t.surface, t.surface_raised, t.elevated]
+    assert len(set(ramp)) == 4
+    assert t.border != t.border_strong
+
+
+def test_build_qss_uses_elevation_tokens() -> None:
+    qss = build_qss(default_theme())
+    for token in (default_theme().surface_raised, default_theme().border_strong):
+        assert token in qss
+
+
+def test_build_qtads_qss_resolves_and_targets_ads_selectors() -> None:
+    for theme in THEMES.values():
+        qss = build_qtads_qss(theme)
+        assert qss.strip()  # non-empty
+        assert "${" not in qss  # every token resolved
+        assert "ads--CDockWidgetTab" in qss  # actually styles QtAds chrome
+        assert theme.accent in qss  # active-tab edge carries the accent

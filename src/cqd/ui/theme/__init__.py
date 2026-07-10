@@ -25,12 +25,21 @@ _FONT_MONO = '"Cascadia Mono", "Consolas", "Menlo", "SF Mono", monospace'
 
 @dataclass(frozen=True)
 class Theme:
-    """Design tokens for one theme. Only `accent` varies across the shipped set."""
+    """Design tokens for one theme. Only `accent` varies across the shipped set.
+
+    Elevation is a three-step ramp on a near-black canvas: `bg` (window) <
+    `surface` (card) < `surface_raised` (headers, tab bars, hover) < `elevated`
+    (dialogs, floating docks, tooltips). Borders come in two weights: `border`
+    (default 1px separators) and `border_strong` (active/focused edges).
+    """
 
     name: str
     bg: str
     surface: str
+    surface_raised: str
+    elevated: str
     border: str
+    border_strong: str
     text: str
     text_muted: str
     accent: str
@@ -44,7 +53,10 @@ class Theme:
 _BASE = dict(
     bg="#0B0D10",
     surface="#14171C",
+    surface_raised="#1B1F27",
+    elevated="#22262F",
     border="#232830",
+    border_strong="#333B47",
     text="#E6E9EF",
     text_muted="#8A93A2",
     positive="#2FBF71",
@@ -75,7 +87,7 @@ QMainWindow, QWidget {
 }
 
 QMenuBar {
-    background-color: ${surface};
+    background-color: ${surface_raised};
     border-bottom: 1px solid ${border};
     padding: 3px 4px;
 }
@@ -98,20 +110,27 @@ QDockWidget { color: ${text_muted}; titlebar-close-icon: none; titlebar-normal-i
 
 /* Slim app header bar (lives above the docks). */
 QToolBar#appHeaderBar {
-    background-color: ${surface};
+    background-color: ${surface_raised};
     border: none;
     border-bottom: 1px solid ${border};
     padding: 6px 12px;
     spacing: 10px;
 }
-QLabel[role="app-title"] { font-size: 14px; font-weight: 700; color: ${text}; }
+QLabel[role="app-title"] { font-size: 14px; font-weight: 700; color: ${text}; letter-spacing: 0.2px; }
 
-/* Per-panel header row. */
+/* Per-panel header row: a slim eyebrow that reads as a section label beneath
+   the dock tab, not a competing title. */
 #panelHeader { border-bottom: 1px solid ${border}; }
-QLabel[role="panel-title"] { font-size: 14px; font-weight: 700; color: ${text}; }
+QLabel[role="panel-title"] {
+    font-size: 11px;
+    font-weight: 700;
+    color: ${text_muted};
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+}
 
 QStatusBar {
-    background: ${surface};
+    background: ${surface_raised};
     border-top: 1px solid ${border};
     color: ${text_muted};
 }
@@ -169,10 +188,10 @@ QTableWidget::item, QTableView::item {
     padding: 7px 10px;
     border-bottom: 1px solid ${border};  /* thin row separator, not heavy slabs */
 }
-QTableView::item:hover { background-color: ${surface}; }
-QHeaderView { background-color: ${surface}; }
+QTableView::item:hover { background-color: ${surface_raised}; }
+QHeaderView { background-color: ${surface_raised}; }
 QHeaderView::section {
-    background-color: ${surface};
+    background-color: ${surface_raised};
     color: ${text_muted};
     border: none;
     border-bottom: 2px solid ${border};
@@ -180,16 +199,16 @@ QHeaderView::section {
     font-family: ${font_ui};
     font-weight: 700;
 }
-QTableCornerButton::section { background-color: ${surface}; border: none; }
+QTableCornerButton::section { background-color: ${surface_raised}; border: none; }
 
 QPushButton {
-    background-color: ${surface};
+    background-color: ${surface_raised};
     color: ${text};
     border: 1px solid ${border};
     border-radius: 5px;
     padding: 6px 14px;
 }
-QPushButton:hover { border-color: ${accent}; }
+QPushButton:hover { border-color: ${border_strong}; background-color: ${elevated}; }
 QPushButton:pressed { background-color: ${border}; }
 QPushButton:default { border-color: ${accent}; }
 /* Buttons embedded in table rows: compact, or the row height clips the text. */
@@ -262,6 +281,67 @@ def build_qss(theme: Theme) -> str:
     tokens = asdict(theme)
     tokens.pop("name", None)
     return _QSS_TEMPLATE.substitute(tokens)
+
+
+# One QtAds template, themed from the same tokens. Kept separate from the app
+# QSS because it is applied to the CDockManager (layered over the manager's
+# shipped default stylesheet, which carries the button icons), not the app.
+_QTADS_QSS_TEMPLATE = Template(
+    """
+/* ---- QtAds workspace chrome, themed over the shipped default ---- */
+ads--CDockContainerWidget { background: ${bg}; }
+ads--CDockContainerWidget ads--CDockSplitter::handle { background: ${border}; }
+ads--CDockContainerWidget ads--CDockSplitter::handle:hover { background: ${accent}; }
+
+/* Each docked group is a card on the darker canvas. */
+ads--CDockAreaWidget {
+    background: ${surface};
+    border: 1px solid ${border};
+    border-radius: 6px;
+}
+ads--CDockAreaTitleBar {
+    background: ${surface_raised};
+    border-bottom: 1px solid ${border};
+    padding: 1px 4px;
+}
+
+/* Tabs: muted by default; the active tab lifts to the card surface + accent edge. */
+ads--CDockWidgetTab {
+    background: transparent;
+    border: none;
+    padding: 5px 12px;
+}
+ads--CDockWidgetTab[activeTab="true"] {
+    background: ${surface};
+    border-top: 2px solid ${accent};
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+}
+ads--CDockWidgetTab QLabel { color: ${text_muted}; font-weight: 600; }
+ads--CDockWidgetTab[activeTab="true"] QLabel { color: ${text}; }
+
+/* Title-bar buttons (close/detach/tabs-menu): keep their icons, theme the hover. */
+ads--CTitleBarButton { background: transparent; border: none; padding: 3px; border-radius: 4px; }
+ads--CTitleBarButton:hover { background: ${border}; }
+
+/* Floating panels read as elevated windows. */
+ads--CFloatingDockContainer {
+    background: ${bg};
+    border: 1px solid ${border_strong};
+}
+"""
+)
+
+
+def build_qtads_qss(theme: Theme) -> str:
+    """Theme string for the QtAds dock manager, from the same tokens as the app.
+
+    Applied on top of the manager's shipped default stylesheet (which sets the
+    button icons) so ours wins by coming last while the icons survive.
+    """
+    tokens = asdict(theme)
+    tokens.pop("name", None)
+    return _QTADS_QSS_TEMPLATE.substitute(tokens)
 
 
 def get_theme(name: str | None) -> Theme:

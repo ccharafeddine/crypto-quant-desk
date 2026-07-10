@@ -142,6 +142,10 @@ class Workspace:
         # Constructing with the main window as parent installs the manager as
         # its central widget.
         self.manager = CDockManager(host)
+        # QtAds ships a default stylesheet on the manager (palette()-based, and
+        # it defines the title-bar button icons). Keep it as the base layer so
+        # the icons survive; theme QSS is appended on top of it (see apply_theme).
+        self._ads_default_qss = self.manager.styleSheet()
         self._docks: dict[str, CDockWidget] = {}
 
     # ---- registration ----
@@ -228,6 +232,13 @@ class Workspace:
     def save_state(self, settings: QSettings) -> None:
         settings.setValue(STATE_KEY, self.manager.saveState())
         self.manager.savePerspectives(settings)
+
+    # ---- theming ----
+
+    def apply_theme(self, themed_qss: str) -> None:
+        """Layer a theme's QtAds QSS over the manager's shipped default so the
+        button icons survive and our rules (coming last) win."""
+        self.manager.setStyleSheet(f"{self._ads_default_qss}\n{themed_qss}")
 
     # ---- menu wiring ----
 

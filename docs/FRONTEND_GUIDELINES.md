@@ -10,27 +10,30 @@ Qt desktop app. "Frontend" = PySide6 widgets styled by a token-driven QSS templa
 
 ## Color tokens (Slate defaults)
 
+These are the actual fields on the `Theme` dataclass (`ui/theme/__init__.py`) — the
+E2 reconciliation replaced the earlier aspirational `bg_primary`-style names with
+what the code ships. Only `accent` varies across themes (Slate/Amber/Teal); every
+other value is shared via `_BASE`. Hex shown is the Slate set.
+
 | Token | Hex | Use |
 |---|---|---|
-| `bg_primary` | `#0E0F12` | window background |
-| `bg_secondary` | `#15171C` | panel background |
-| `bg_tertiary` | `#1B1E25` | table rows, inputs |
-| `bg_elevated` | `#22262F` | headers, dialogs, tooltips |
-| `text_primary` | `#E6E8EB` | primary text |
-| `text_secondary` | `#9AA0A8` | labels, subtitles |
-| `text_muted` | `#6B7079` | footnotes, disabled |
-| `accent` | `#5B8CFF` | focus, selection, links, primary buttons |
-| `accent_dim` | `#3F66B8` | hover/pressed accent |
-| `green` | `#1BC47D` | positive PnL, buy side, success |
-| `green_dim` | `#0E7A4C` | buy-button pressed, success bg |
-| `red` | `#E14C5C` | negative PnL, sell side, errors, LIVE badge |
-| `red_dim` | `#8C2F39` | sell-button pressed, error bg |
-| `border` | `#2A2E36` | default 1px borders |
-| `border_strong` | `#3A3F49` | focused/active borders |
-| `warning` | `#E8A33D` | **new token** — PAPER badge, DELAYED state, caution banners |
-| `warning_dim` | `#9A6B1F` | **new token** — warning backgrounds |
+| `bg` | `#0B0D10` | window / workspace canvas |
+| `surface` | `#14171C` | panel/card background, active dock tab |
+| `surface_raised` | `#1B1F27` | headers, tab bars, table header, hover |
+| `elevated` | `#22262F` | dialogs, floating docks, button hover |
+| `border` | `#232830` | default 1px borders, separators |
+| `border_strong` | `#333B47` | active/focused edges, floating frame |
+| `text` | `#E6E9EF` | primary text |
+| `text_muted` | `#8A93A2` | labels, subtitles, footnotes, muted tabs |
+| `accent` | `#5B8CFF` | focus, selection, active-tab edge, links (per-theme) |
+| `positive` | `#2FBF71` | positive PnL, buy/long, success |
+| `negative` | `#E5484D` | negative PnL, sell/short, errors, LIVE/offline |
 
-Rule: buy/long is always `green`, sell/short is always `red`, never theme-accent. LIVE mode badge is always `red`-family regardless of theme; PAPER is `warning`.
+Rule: buy/long is always `positive`, sell/short is always `negative`, never
+theme-accent. The elevation ramp `bg < surface < surface_raised < elevated`
+conveys depth without drop shadows. A dedicated `warning` token (PAPER/DELAYED
+amber) is not yet a separate field — those states currently reuse `accent`; add a
+token here and to `Theme` if/when they need to diverge from the accent.
 
 ## Typography
 
@@ -65,7 +68,7 @@ Panels read as premium cards, not flat regions:
 - **Elevation** is conveyed by `bg_*`/border steps (no drop shadows inside the workspace): window `bg` < panel `surface` < raised header/controls. Card radius 6px, 1px `border`; the active/focused card gets a 1px `accent` top edge or `border_strong` outline.
 - **Per-panel header** (`PanelHeader`): title (11pt semibold) on the left; panel-specific controls on the right — symbol selector, timeframe segmented control, and a settings gear where relevant. Controls are ghost-styled, 24px tall, and never shift the header height.
 - **QtAds surfaces are themed through tokens** (no hardcoded hex): dock tab bar matches the existing `QTabBar` tokens (selected tab = `bg` + 2px `accent` edge); title bars use `surface`; splitter handles are 4px, `border`, hover `accent`; the floating-widget frame uses `surface` + `border`. Auto-hide/pin tabs, where used, follow the same tab tokens.
-- **Note on token reconciliation (E2):** the implemented `Theme` dataclass currently exposes a smaller token set (`bg`, `surface`, `border`, `text`, `text_muted`, `accent`, `positive`, `negative`) than the table below. E2 unifies the two — either mapping the doc names onto the dataclass or extending the dataclass with the elevation tokens — and this file is updated to match whatever ships. Until then, `surface`/`bg`/`border` are the real names in code.
+- **Token reconciliation (done in E2):** the `Theme` dataclass now carries the full elevation ramp (`bg`, `surface`, `surface_raised`, `elevated`, `border`, `border_strong`, `text`, `text_muted`, `accent`, `positive`, `negative`) and the color-token table below matches it exactly. The QtAds chrome is themed from these same tokens via `build_qtads_qss`, layered over QtAds' shipped default (which keeps its button icons); the active dock tab carries the `accent` edge and recolors live on theme switch.
 
 ## Component patterns
 
