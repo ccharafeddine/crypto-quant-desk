@@ -1,6 +1,6 @@
 # CLAUDE.md — crypto-quant-desk v2
 
-Project layer over the global `~/.claude/CLAUDE.md`. The contest era is over; this is now a personal Windows-first Kraken spot dashboard and trading terminal, and the future cockpit for an autotrader.
+Project layer over the global `~/.claude/CLAUDE.md`. The contest era is over; this is now a personal cross-platform (Windows & macOS) Kraken spot dashboard and trading terminal, and the future cockpit for an autotrader.
 
 ## Source of truth
 
@@ -17,14 +17,14 @@ Session habit: read `progress.txt` and `docs/lessons.md` at session start; updat
 
 ## Architecture in one paragraph
 
-PySide6 + qasync desktop app. Panels talk to services; services talk to Kraken. Primary backend is `KrakenRESTClient` (native HTTPS, in-house signing) plus `KrakenWSClient` (WebSocket v2 streaming); the legacy CLI subprocess client remains an alternate backend where the `kraken` binary exists (never required on Windows). `src/cqd/engine/` is pure math — no I/O, no Qt, no subprocess, ever; every engine change ships with tests. `src/cqd/trading/` is the only path that can move money. No database: QSettings + JSON files under `%LOCALAPPDATA%\CryptoQuantDesk` + Windows Credential Manager.
+PySide6 + qasync desktop app. Panels talk to services; services talk to Kraken. Primary backend is `KrakenRESTClient` (native HTTPS, in-house signing) plus `KrakenWSClient` (WebSocket v2 streaming); the legacy CLI subprocess client remains an alternate backend where the `kraken` binary exists (never required on Windows). `src/cqd/engine/` is pure math — no I/O, no Qt, no subprocess, ever; every engine change ships with tests. `src/cqd/trading/` is the only path that can move money. No database: QSettings + JSON files under the per-user data dir (`%LOCALAPPDATA%\CryptoQuantDesk` on Windows, `~/Library/Application Support/CryptoQuantDesk` on macOS) + the OS credential store.
 
 ## Hard guardrails
 
 - **Data sources:** Kraken official APIs (REST/WS/CLI) and nothing else for market/portfolio data. No ccxt, yfinance, or any third-party feed. Anthropic API only for the analyst panel, narrating engine-computed numbers.
 - **Money path:** every order goes through `OrderService` → validation → confirmation dialog → mode routing. Never add a bypass. Paper mode is the default; live mode requires typed confirmation. Max-order-value cap applies in both modes.
 - **Withdrawals:** no code path may construct, wrap, or call any `Withdraw*` endpoint. Never request withdraw permission. Permanent.
-- **Secrets:** keys live in Windows Credential Manager via `data/credentials.py` (the only module allowed to touch key material); `.env` is a gitignored dev fallback. No key in logs, exceptions, audit entries, argv, or LLM prompts. Only `.env.example` is committed.
+- **Secrets:** keys live in the OS credential store (Windows Credential Manager / macOS Keychain) via `data/credentials.py` (the only module allowed to touch key material); `.env` is a gitignored dev fallback. No key in logs, exceptions, audit entries, argv, or LLM prompts. Only `.env.example` is committed.
 - **Privacy:** this repo is public and may be installed on other devices. No real balances, trade amounts, txids, account details, or private-strategy references in code, tests, fixtures, or docs. Demo/test data is synthetic only. The autotrader's strategy logic will live in a separate private repo; only its interfaces (order service, paper broker, audit log `source` field) exist here.
 - **Symbols:** Kraken-native handling per `data/normalize.py` (classic X/Z codes on output, `BASE/QUOTE` slash form internally). Annualization 365; simple returns; EWMA λ=0.94; footnote conventions in the UI.
 - **Known caveat:** non-USD-quoted cost bases are labeled in their quote currency, never silently converted or summed as USD.

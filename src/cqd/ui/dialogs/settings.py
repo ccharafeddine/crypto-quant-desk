@@ -80,8 +80,8 @@ class SettingsDialog(QDialog):
         self.kraken_secret.setPlaceholderText("Kraken API secret")
 
         self.kraken_status = QLabel(
-            "Keys are stored in Windows Credential Manager after a successful "
-            "verification. Stored keys are never displayed."
+            f"Keys are stored in {credentials.credential_store_name()} after a "
+            "successful verification. Stored keys are never displayed."
         )
         self.kraken_status.setWordWrap(True)
         self.kraken_status.setProperty("role", "footnote")
@@ -180,14 +180,14 @@ class SettingsDialog(QDialog):
             pass
         self._set_status(
             f"Verified: {len(balance)} balance entries visible. Keys stored in "
-            "Windows Credential Manager."
+            f"{credentials.credential_store_name()}."
         )
 
     def _on_disconnect_clicked(self) -> None:
         confirm = QMessageBox.question(
             self,
             "Disconnect account",
-            "Delete the stored Kraken keys from Windows Credential Manager?\n"
+            f"Delete the stored Kraken keys from {credentials.credential_store_name()}?\n"
             "The app will fall back to demo data.",
         )
         if confirm != QMessageBox.StandardButton.Yes:

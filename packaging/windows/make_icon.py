@@ -6,7 +6,8 @@ near-black canvas and accent blue the app ships with - so the taskbar/titlebar
 icon matches the running app.
 
 Run from the repo root:  python packaging/windows/make_icon.py
-Writes packaging/windows/cqd.ico and packaging/windows/cqd.png.
+Writes cqd.ico (Windows), cqd.icns (macOS bundle), and cqd.png (README preview)
+into packaging/windows/.
 """
 
 from __future__ import annotations
@@ -74,11 +75,13 @@ def main() -> int:
     icon = render(256)
     ico_path = os.path.join(HERE, "cqd.ico")
     png_path = os.path.join(HERE, "cqd.png")
+    icns_path = os.path.join(HERE, "cqd.icns")  # macOS bundle icon
     if not icon.save(ico_path, "ICO"):
         print(f"failed to write {ico_path}", file=sys.stderr)
         return 1
     icon.save(png_path, "PNG")
-    print(f"wrote {ico_path} and {png_path}")
+    icon.save(icns_path, "ICNS")
+    print(f"wrote {ico_path}, {png_path}, {icns_path}")
     return 0
 
 

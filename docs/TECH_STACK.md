@@ -5,7 +5,7 @@
 - **Language:** Python **3.11+** (developed on 3.14; 3.11 is the floor in `pyproject.toml`)
 - **UI framework:** PySide6 (Qt 6) — native desktop. The workspace host is the **Qt Advanced Docking System** (`PySide6-QtAds`): every panel is a floatable/tabbable/freely-resizable card, and named layouts ("perspectives") save/restore to QSettings.
 - **Async:** asyncio bridged into Qt via qasync
-- **Target OS:** Windows 10/11 (primary). Code stays importable on macOS/Linux; only packaging is Windows-only in v1.
+- **Target OS:** Windows 10/11 and macOS 11+ (both packaged and supported). Code stays importable on Linux. Native notifications: Windows toasts (`winotify`), macOS Notification Center (`osascript`), log fallback elsewhere.
 
 ## Dependencies (pyproject `dependencies`)
 
@@ -25,8 +25,8 @@ Versions are minimum pins (`>=`), matching the repo's existing convention; the l
 | `anthropic` | `>=0.40` | Analyst panel (Claude) |
 | `httpx` | `>=0.27` | Kraken REST client (async HTTP) |
 | `websockets` | `>=12.0` | **new** — Kraken WebSocket v2 streams |
-| `keyring` | `>=25.0` | **new** — Windows Credential Manager storage |
-| `winotify` | `>=1.1; sys_platform == 'win32'` | **new** — Windows toast notifications (alerts) |
+| `keyring` | `>=25.0` | **new** — OS credential store (Windows Credential Manager / macOS Keychain) |
+| `winotify` | `>=1.1; sys_platform == 'win32'` | **new** — Windows toast notifications (macOS uses `osascript`, no dep) |
 
 Dev (`[dev]` extra): `pytest>=8.0`, `pytest-asyncio>=0.23`, `pytest-qt>=4.4`, `ruff>=0.5`, `pyinstaller>=6.0`.
 
@@ -84,7 +84,7 @@ No other network calls, ever. No telemetry, no update checks, no analytics.
 
 - **Lint/format:** ruff (`ruff check src tests`, `ruff format src tests`), line length 100, target py311
 - **Tests:** pytest + pytest-asyncio (`asyncio_mode = auto`) + pytest-qt for panel tests; run `pytest -q`
-- **Packaging:** PyInstaller (windowed, one-dir) → **Inno Setup 6** script in `packaging/windows/` for the installer. The macOS spec/`build_dmg.sh` stay in `packaging/` untouched but unmaintained.
+- **Packaging:** PyInstaller (windowed, one-dir) on both OSes. Windows: **Inno Setup 6** installer in `packaging/windows/`. macOS: `.app` via `packaging/crypto-quant-desk.spec`, `.dmg` via `packaging/build_dmg.sh` (unsigned).
 
 ## Explicitly forbidden
 

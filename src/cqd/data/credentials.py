@@ -1,16 +1,17 @@
 """Credential storage: OS vault first, environment fallback.
 
 This is the ONLY module allowed to touch key material. Keys live in the OS
-credential vault (Windows Credential Manager via `keyring`) under service
-"cqd"; environment variables (loaded from a gitignored .env by the app
-bootstrap) remain a dev-only fallback. Key VALUES must never appear in logs,
-exceptions, audit entries, or LLM prompts - functions here return them or
-None, nothing else.
+credential vault via `keyring` (Windows Credential Manager, macOS Keychain, or
+the platform keyring elsewhere) under service "cqd"; environment variables
+(loaded from a gitignored .env by the app bootstrap) remain a dev-only fallback.
+Key VALUES must never appear in logs, exceptions, audit entries, or LLM prompts -
+functions here return them or None, nothing else.
 """
 
 from __future__ import annotations
 
 import os
+import sys
 
 import keyring
 import keyring.errors
@@ -19,6 +20,15 @@ SERVICE = "cqd"
 _KRAKEN_KEY = "kraken-api-key"
 _KRAKEN_SECRET = "kraken-api-secret"
 _ANTHROPIC_KEY = "anthropic-api-key"
+
+
+def credential_store_name() -> str:
+    """Human name of the OS credential store, for UI/text (not key material)."""
+    if sys.platform == "win32":
+        return "Windows Credential Manager"
+    if sys.platform == "darwin":
+        return "macOS Keychain"
+    return "your system keyring"
 
 
 def _vault_get(entry: str) -> str | None:

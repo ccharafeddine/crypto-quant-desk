@@ -8,7 +8,7 @@
 # Usage (from anywhere):  bash packaging/build_dmg.sh
 set -euo pipefail
 
-VERSION="0.2.0"  # keep in sync with packaging/crypto-quant-desk.spec
+VERSION="2.0.0"  # keep in sync with packaging/crypto-quant-desk.spec
 VOLNAME="Crypto Quant Desk"
 APP_NAME="Crypto Quant Desk.app"
 

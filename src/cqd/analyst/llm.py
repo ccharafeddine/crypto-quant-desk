@@ -5,7 +5,7 @@ the ONLY module here that makes a network call; it is deliberately small and is
 exercised end-to-end (needs a live key), not in unit tests. All grounding,
 prompt building and cost math live in the pure `context` module beside it.
 
-Guardrails honored here: the API key is read from Windows Credential Manager via
+Guardrails honored here: the API key is read from the OS credential store via
 `data.credentials` and never logged or echoed; the request carries only the
 engine-computed context the caller passes in, never raw key material; and a call
 happens only when the caller invokes `stream()` (the panel wires it to a button).

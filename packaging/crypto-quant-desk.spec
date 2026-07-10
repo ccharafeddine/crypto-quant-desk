@@ -1,47 +1,48 @@
-# PyInstaller spec for Crypto Quant Desk (Phase 1: launchable .app, unsigned).
+# PyInstaller spec for Crypto Quant Desk on macOS (onedir .app, unsigned).
 #
 # Build from the repo root:  pyinstaller packaging/crypto-quant-desk.spec
 # Output: dist/Crypto Quant Desk.app  (onedir BUNDLE)
 #
 # Notes:
 #  - onedir (not onefile): more reliable and far faster to debug for Qt apps.
-#  - The kraken CLI is bundled at the _MEIPASS root as "kraken"; that is exactly
-#    what KrakenClient._resolve_binary() looks for (os.path.join(_MEIPASS,
-#    "kraken")), so the packaged app finds its own CLI with nothing installed.
-#  - PySide6's PyInstaller hook collects the Qt platform plugin (libqcocoa) and
-#    friends automatically; we add explicit collection only for the dynamic
-#    packages (pyqtgraph) and the runtime data file the app reads (the QSS).
-#  - No .env or secrets are bundled. The app reads the user's own .env at runtime.
+#  - No kraken CLI is bundled. The app is REST/WebSocket primary on every OS; the
+#    legacy CLI path is optional and never required, so the .app is self-contained
+#    without it.
+#  - PySide6's PyInstaller hook collects the Qt cocoa platform plugin and friends
+#    automatically. keyring (macOS Keychain backend), PySide6-QtAds (compiled
+#    docking extension), certifi (TLS CA bundle) and anthropic are collected
+#    explicitly because the default graph misses them. The theme is generated in
+#    code, so there is no .qss data file to ship.
+#  - No .env or secrets are bundled. Keys live in the macOS Keychain; user data
+#    lives under ~/Library/Application Support/CryptoQuantDesk.
 
 import os
-import shutil
 
-from PyInstaller.utils.hooks import collect_data_files, collect_submodules
+from PyInstaller.utils.hooks import collect_all, collect_submodules
+
+APP_VERSION = "2.0.0"
 
 # SPECPATH is the directory containing this spec (packaging/); its parent is the
 # repo root.
 REPO = os.path.dirname(os.path.abspath(SPECPATH))
 SRC = os.path.join(REPO, "src")
+ICON = os.path.join(SPECPATH, "windows", "cqd.icns")  # shared icon source
 
-# Resolve the kraken binary (PATH first, then the known Cargo location). Fail
-# the build loudly if it's missing rather than shipping a broken bundle.
-KRAKEN = shutil.which("kraken") or os.path.expanduser("~/.cargo/bin/kraken")
-if not os.path.isfile(KRAKEN):
-    raise SystemExit(f"kraken binary not found (looked at {KRAKEN}); cannot bundle.")
-
-# Runtime data file the app loads via Path(__file__).parent/ui/theme/...; must be
-# placed alongside the collected cqd package or _load_stylesheet() crashes.
-QSS = os.path.join(SRC, "cqd", "ui", "theme", "kraken_dark.qss")
-
-binaries = [
-    (KRAKEN, "."),  # -> _MEIPASS/kraken, matching _resolve_binary()
-]
-
-datas = [
-    (QSS, "cqd/ui/theme"),
-] + collect_data_files("pyqtgraph")
-
+datas = []
+binaries = []
 hiddenimports = ["qasync"] + collect_submodules("pyqtgraph")
+
+# Packages PyInstaller's default graph misses (winotify is Windows-only and is
+# not collected here).
+for pkg in ("PySide6QtAds", "keyring", "certifi", "anthropic"):
+    pkg_datas, pkg_binaries, pkg_hidden = collect_all(pkg)
+    datas += pkg_datas
+    binaries += pkg_binaries
+    hiddenimports += pkg_hidden
+
+# The macOS Keychain backend loads via an entry point; name it explicitly in case
+# collect_all misses the lazy import.
+hiddenimports += ["keyring.backends.macOS"]
 
 a = Analysis(
     [os.path.join(SRC, "cqd", "__main__.py")],
@@ -51,10 +52,16 @@ a = Analysis(
     hiddenimports=hiddenimports,
     hookspath=[],
     runtime_hooks=[],
-    # Trim heavy/unused stacks to keep the Phase 1 bundle lean. These are not on
-    # the app's launch path (no notebooks, no test runner, no Qt WebEngine).
-    excludes=["tkinter", "PySide6.QtWebEngineCore", "PySide6.QtWebEngineWidgets",
-              "pytest", "IPython", "notebook"],
+    # Trim heavy/unused stacks: nothing on the launch path needs a test runner,
+    # notebooks, Tk, or Qt WebEngine.
+    excludes=[
+        "tkinter",
+        "PySide6.QtWebEngineCore",
+        "PySide6.QtWebEngineWidgets",
+        "pytest",
+        "IPython",
+        "notebook",
+    ],
     noarchive=False,
 )
 
@@ -84,14 +91,14 @@ coll = COLLECT(
 app = BUNDLE(
     coll,
     name="Crypto Quant Desk.app",
-    icon=None,  # Phase 1: no icon yet (added in the ship pass)
+    icon=ICON if os.path.isfile(ICON) else None,
     bundle_identifier="com.ccharafeddine.cryptoquantdesk",
-    version="0.2.0",
+    version=APP_VERSION,
     info_plist={
         "CFBundleName": "Crypto Quant Desk",
         "CFBundleDisplayName": "Crypto Quant Desk",
-        "CFBundleShortVersionString": "0.2.0",
-        "CFBundleVersion": "0.2.0",
+        "CFBundleShortVersionString": APP_VERSION,
+        "CFBundleVersion": APP_VERSION,
         "NSHighResolutionCapable": True,
         # Allow the app's dark theme regardless of system appearance.
         "NSRequiresAquaSystemAppearance": False,
