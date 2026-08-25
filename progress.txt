@@ -311,7 +311,32 @@ Last session: 2026-07-10
   topics updated via `gh repo edit` (was stale contest text). CANNOT build/test the mac
   .app from this Windows box (PyInstaller BUNDLE is macOS-only) - owner builds on a Mac.
 
+- 2026-08-24: Expansion v2.2 (SIGNALS_PLAN.md) S1+S2 COMPLETE (pure engine only;
+  awaiting owner review before S3-S5). Three new pure engine modules + tests, 52
+  new tests, 378 passed, ruff clean. NO money-path touch, no signal->order path
+  (grep-verified), no new deps. engine/indicators.py: sma/atr/rsi over pd.Series+
+  list[Candle], donchian returns SHIFTED prior-N channel (look-ahead guard, pinned
+  by a regression test). engine/signals.py: StrategyParams/TradeSetup/TrendState +
+  engine-local PairSpec; trend_state (long-only, price>trend MA gate) + evaluate_setup
+  (entry=last close|donchian upper, stop=entry-atr_mult*ATR, size floored to lot prec,
+  FAILS CLOSED below ordermin, 5:1 leverage cap; confidence from trend strength only;
+  advisory daily_room/total_room from passed-in equities). engine/microstructure.py:
+  BookFeatures/Wall/FillEstimate/TimingVerdict + book_features/detect_walls/
+  expected_fill/entry_timing (execution timing only, conservative: unknown/thin/
+  one-sided book -> WAIT, never GO). DECISIONS (documented in code, not guessed):
+  simple-avg ATR/RSI for hand-verifiability; breakout uses params.fast as the Donchian
+  length; engine-local PairSpec (purity rule = no import from trading/); created_ts =
+  last bar time (deterministic); targets 1R/2R/3R, rr=furthest. NOTE: SIGNALS_PLAN.md
+  currently at repo ROOT (untracked), though CLAUDE.md/plan reference docs/ - owner to
+  confirm final location. NOT YET: S3 service/wiring, S4 backtest+track record, S5
+  panel/analyst/alerts.
+
 ## Next (all need the owner's machines)
+- Expansion v2.2 S3-S5 (after owner review of S1+S2): S3 SignalsService (impure, thin:
+  timer + SymbolHub.changed -> get_ohlc/get_depth, rolling depth deque for flow_delta,
+  run engine, emit setup_updated) + Strategy settings tab; S4 engine/backtest.py
+  walk_forward + live track record JSONL; S5 SignalsPanel + analyst signals_snapshot +
+  "setup armed" alert rule. Signals stay signals-only (no order path).
 - Windows installer: install Inno Setup 6, run ISCC on packaging\windows\installer.iss
   -> dist\installer\crypto-quant-desk-2.0.0-setup.exe. (.iss written but not yet compiled.)
 - macOS build: on a Mac, `pyinstaller packaging/crypto-quant-desk.spec` then
