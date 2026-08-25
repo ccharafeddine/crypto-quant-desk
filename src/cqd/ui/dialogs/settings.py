@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QComboBox,
     QMessageBox,
     QPushButton,
+    QSpinBox,
     QTabWidget,
     QVBoxLayout,
     QWidget,
@@ -55,6 +56,7 @@ class SettingsDialog(QDialog):
         tabs.addTab(self._build_keys_tab(), "Keys")
         tabs.addTab(self._build_trading_tab(), "Trading")
         tabs.addTab(self._build_data_tab(), "Data")
+        tabs.addTab(self._build_strategy_tab(), "Strategy")
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
@@ -258,6 +260,90 @@ class SettingsDialog(QDialog):
         form.addRow("Dust threshold", self.dust)
         return page
 
+    # ---------- Strategy tab ----------
+
+    def _build_strategy_tab(self) -> QWidget:
+        page = QWidget()
+        form = QFormLayout(page)
+
+        self.strategy_enabled = QCheckBox("Compute trade signals for the target pairs")
+        self.strategy_enabled.setChecked(store.get_strategy_enabled())
+
+        self.strategy_variant = QComboBox()
+        self.strategy_variant.addItem("MA cross", "ma_cross")
+        self.strategy_variant.addItem("Breakout (Donchian)", "breakout")
+        for i in range(self.strategy_variant.count()):
+            if self.strategy_variant.itemData(i) == store.get_strategy_variant():
+                self.strategy_variant.setCurrentIndex(i)
+                break
+
+        self.strategy_fast = self._int_spin(2, 500, store.get_strategy_fast())
+        self.strategy_slow = self._int_spin(3, 1000, store.get_strategy_slow())
+        self.strategy_trend = self._int_spin(4, 2000, store.get_strategy_trend())
+        self.strategy_atr_len = self._int_spin(1, 500, store.get_strategy_atr_len())
+
+        self.strategy_atr_mult = QDoubleSpinBox()
+        self.strategy_atr_mult.setRange(0.1, 20.0)
+        self.strategy_atr_mult.setSingleStep(0.1)
+        self.strategy_atr_mult.setDecimals(2)
+        self.strategy_atr_mult.setValue(store.get_strategy_atr_mult())
+
+        self.strategy_risk = QDoubleSpinBox()  # shown as a percent, stored as a fraction
+        self.strategy_risk.setRange(0.01, 99.0)
+        self.strategy_risk.setSingleStep(0.05)
+        self.strategy_risk.setDecimals(2)
+        self.strategy_risk.setSuffix(" %")
+        self.strategy_risk.setValue(store.get_strategy_risk_pct() * 100.0)
+
+        self.strategy_timeframe = QComboBox()
+        for label, minutes in (
+            ("1 hour", 60),
+            ("4 hours", 240),
+            ("1 day", 1440),
+            ("1 week", 10080),
+        ):
+            self.strategy_timeframe.addItem(label, minutes)
+        for i in range(self.strategy_timeframe.count()):
+            if self.strategy_timeframe.itemData(i) == store.get_strategy_timeframe_minutes():
+                self.strategy_timeframe.setCurrentIndex(i)
+                break
+
+        self.strategy_poll = self._int_spin(1, 3600, store.get_strategy_poll_seconds())
+        self.strategy_poll.setSuffix(" s")
+
+        self.strategy_pairs = QLineEdit(", ".join(store.get_strategy_pairs()))
+        self.strategy_pairs.setPlaceholderText("XBTUSD, ETHUSD")
+
+        note = QLabel(
+            "Signals are advisory only: the app proposes sized setups and an "
+            "execution/timing read on the order book. It never places an order - "
+            "you still send everything through the ticket. Windows must satisfy "
+            "fast < slow < trend or the defaults are used."
+        )
+        note.setWordWrap(True)
+        note.setProperty("role", "footnote")
+
+        form.addRow(self.strategy_enabled)
+        form.addRow("Variant", self.strategy_variant)
+        form.addRow("Fast MA", self.strategy_fast)
+        form.addRow("Slow MA", self.strategy_slow)
+        form.addRow("Trend MA", self.strategy_trend)
+        form.addRow("ATR length", self.strategy_atr_len)
+        form.addRow("ATR stop multiple", self.strategy_atr_mult)
+        form.addRow("Risk per trade", self.strategy_risk)
+        form.addRow("Timeframe", self.strategy_timeframe)
+        form.addRow("Poll interval", self.strategy_poll)
+        form.addRow("Target pairs", self.strategy_pairs)
+        form.addRow(note)
+        return page
+
+    @staticmethod
+    def _int_spin(low: int, high: int, value: int) -> QSpinBox:
+        spin = QSpinBox()
+        spin.setRange(low, high)
+        spin.setValue(value)
+        return spin
+
     # ---------- persist ----------
 
     def accept(self) -> None:
@@ -265,5 +351,16 @@ class SettingsDialog(QDialog):
         store.set_max_order_usd(self.max_order.value())
         store.set_dust_threshold_usd(self.dust.value())
         store.set_data_source(self.source_combo.currentData())
+        store.set_strategy_enabled(self.strategy_enabled.isChecked())
+        store.set_strategy_variant(self.strategy_variant.currentData())
+        store.set_strategy_fast(self.strategy_fast.value())
+        store.set_strategy_slow(self.strategy_slow.value())
+        store.set_strategy_trend(self.strategy_trend.value())
+        store.set_strategy_atr_len(self.strategy_atr_len.value())
+        store.set_strategy_atr_mult(self.strategy_atr_mult.value())
+        store.set_strategy_risk_pct(self.strategy_risk.value() / 100.0)
+        store.set_strategy_timeframe_minutes(self.strategy_timeframe.currentData())
+        store.set_strategy_poll_seconds(self.strategy_poll.value())
+        store.set_strategy_pairs(store.parse_pairs(self.strategy_pairs.text()))
         self.settings_changed.emit()
         super().accept()

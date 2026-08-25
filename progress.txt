@@ -331,12 +331,38 @@ Last session: 2026-07-10
   confirm final location. NOT YET: S3 service/wiring, S4 backtest+track record, S5
   panel/analyst/alerts.
 
+- 2026-08-25: Expansion v2.2 S3 COMPLETE (service + settings; awaiting owner review
+  before S4-S5). 392 passed (14 new), ruff clean. NO order path, no new deps. New
+  ui/signals_service.py: pure evaluate_snapshot(candles, depth, params, equity, spec,
+  prev_imbalance) -> SignalsSnapshot(setup, features, fill, verdict, flow_delta,
+  imbalance) composes the S1+S2 engines (trend picks direction, order-flow only times
+  it; fill walks the book for the setup's own size_quote; flow_delta = L10-imbalance
+  change vs the oldest reading in a bounded deque). SignalsService(QObject): timer +
+  per-symbol generation guard (drops slow/stale responses like the panels), set_symbol
+  clears the flow buffer + pulls, refresh_once fetches get_ohlc+get_depth, emits
+  setup_updated(setup,features,fill,verdict) or error(str); KrakenError -> error signal,
+  spec fetch failure -> no setup but still emits the book. build_strategy_params() reads
+  settings and FAILS SAFE to StrategyParams v1 on any pydantic violation (e.g. hand-
+  edited fast>=slow). settings_store: strategy/* primitives (enabled default OFF/opt-in,
+  variant, fast/slow/trend/atr_len/atr_mult, risk_pct fraction, timeframe_minutes=1440,
+  poll_seconds=30, pairs default XBTUSD/ETHUSD) + parse_pairs. services.strategy_pair_spec
+  adapts trading.limits.PairSpec -> engine PairSpec (the one seam; engine still never
+  imports trading/). Settings dialog: new "Strategy" tab (enabled/variant/MAs/ATR/risk%/
+  timeframe/poll/pairs), verified constructing offscreen. DECISIONS: evaluate_snapshot
+  lives in the ui service (composition concern: buys size_quote, long-only), pure +
+  tested directly; service tested with fake client + direct refresh_once (fake clock =
+  bypass QTimer + injected poll_ms). NOT WIRED into main_window yet - no consumer until
+  the S5 panel; deferred deliberately so the app doesn't poll into a void. NOT YET: S4
+  engine/backtest.py walk_forward + live track record; S5 SignalsPanel + analyst
+  signals_snapshot + "setup armed" alert rule.
+
 ## Next (all need the owner's machines)
-- Expansion v2.2 S3-S5 (after owner review of S1+S2): S3 SignalsService (impure, thin:
-  timer + SymbolHub.changed -> get_ohlc/get_depth, rolling depth deque for flow_delta,
-  run engine, emit setup_updated) + Strategy settings tab; S4 engine/backtest.py
-  walk_forward + live track record JSONL; S5 SignalsPanel + analyst signals_snapshot +
-  "setup armed" alert rule. Signals stay signals-only (no order path).
+- Expansion v2.2 S4-S5 (after owner review of S3): S4 engine/backtest.py walk_forward
+  (pass/bust/unresolved under prop limits, expectancy, PF, max DD, regime tag; seedless)
+  + live track-record JSONL; S5 SignalsPanel (setup card + execution overlay + track
+  record, "Send to ticket" pre-fill only) + wire SignalsService into main_window
+  (SymbolHub.changed -> service.set_symbol, setup_updated -> panel) + analyst
+  signals_snapshot + "setup armed/triggered" alert rule. Signals stay signals-only.
 - Windows installer: install Inno Setup 6, run ISCC on packaging\windows\installer.iss
   -> dist\installer\crypto-quant-desk-2.0.0-setup.exe. (.iss written but not yet compiled.)
 - macOS build: on a Mac, `pyinstaller packaging/crypto-quant-desk.spec` then

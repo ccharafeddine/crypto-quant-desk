@@ -13,6 +13,8 @@ from cqd.data.client import resolve_demo
 from cqd.data.errors import KrakenError
 from cqd.data.paths import app_data_dir
 from cqd.data.rest import KrakenRESTClient
+from cqd.data.symbols import Symbol
+from cqd.engine.signals import PairSpec as SignalPairSpec
 from cqd.trading.audit import AuditLog
 from cqd.trading.limits import PairSpec
 from cqd.trading.orders import OrderService
@@ -99,6 +101,25 @@ async def pair_specs() -> dict[str, PairSpec]:
             raise KrakenError("AssetPairs returned no usable pairs")
         _specs = specs
     return _specs
+
+
+async def strategy_pair_spec(symbol: Symbol) -> SignalPairSpec | None:
+    """Engine-shaped `PairSpec` for `symbol`, or `None` if the pair is unknown.
+
+    Adapts the trading-layer `PairSpec` (from AssetPairs, cached by `pair_specs`)
+    into the signal engine's own minimal spec. The signal engine deliberately
+    does not import from `trading/`, so this is the one seam that bridges them.
+    """
+    specs = await pair_specs()
+    spec = specs.get(symbol.rest)
+    if spec is None:
+        return None
+    return SignalPairSpec(
+        symbol=symbol.display,
+        price_decimals=spec.price_decimals,
+        lot_decimals=spec.lot_decimals,
+        ordermin=spec.ordermin,
+    )
 
 
 def reset_for_tests() -> None:

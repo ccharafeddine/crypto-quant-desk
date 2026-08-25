@@ -37,6 +37,13 @@ def _as_float(value, default: float) -> float:
         return default
 
 
+def _as_int(value, default: int) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
 # ---------- trading ----------
 
 
@@ -92,6 +99,119 @@ def apply_data_source_env() -> None:
         os.environ.pop("CQD_DATA_SOURCE", None)
     else:
         os.environ["CQD_DATA_SOURCE"] = source
+
+
+# ---------- strategy / signals ----------
+# The signal engine is advisory-only (it proposes setups; it never places an
+# order). Defaults mirror StrategyParams v1 (STRATEGY.md) and are duplicated as
+# plain literals here so this Qt-settings module stays free of the engine import.
+# The engine model is re-validated when the params are assembled
+# (signals_service.build_strategy_params), so a hand-edited registry value that
+# breaks the fast<slow<trend ordering just falls back to these defaults.
+
+STRATEGY_VARIANTS = ("ma_cross", "breakout")
+_DEFAULT_STRATEGY_PAIRS = ("XBTUSD", "ETHUSD")
+
+
+def get_strategy_enabled() -> bool:
+    """Signals off by default - the user opts in (like live trading)."""
+    return _as_bool(_qs().value("strategy/enabled"), False)
+
+
+def set_strategy_enabled(on: bool) -> None:
+    _qs().setValue("strategy/enabled", bool(on))
+
+
+def get_strategy_variant() -> str:
+    value = str(_qs().value("strategy/variant") or "ma_cross").strip().lower()
+    return value if value in STRATEGY_VARIANTS else "ma_cross"
+
+
+def set_strategy_variant(value: str) -> None:
+    _qs().setValue("strategy/variant", value if value in STRATEGY_VARIANTS else "ma_cross")
+
+
+def get_strategy_fast() -> int:
+    return _as_int(_qs().value("strategy/fast"), 20)
+
+
+def set_strategy_fast(value: int) -> None:
+    _qs().setValue("strategy/fast", int(value))
+
+
+def get_strategy_slow() -> int:
+    return _as_int(_qs().value("strategy/slow"), 50)
+
+
+def set_strategy_slow(value: int) -> None:
+    _qs().setValue("strategy/slow", int(value))
+
+
+def get_strategy_trend() -> int:
+    return _as_int(_qs().value("strategy/trend"), 200)
+
+
+def set_strategy_trend(value: int) -> None:
+    _qs().setValue("strategy/trend", int(value))
+
+
+def get_strategy_atr_len() -> int:
+    return _as_int(_qs().value("strategy/atr_len"), 14)
+
+
+def set_strategy_atr_len(value: int) -> None:
+    _qs().setValue("strategy/atr_len", int(value))
+
+
+def get_strategy_atr_mult() -> float:
+    return _as_float(_qs().value("strategy/atr_mult"), 2.0)
+
+
+def set_strategy_atr_mult(value: float) -> None:
+    _qs().setValue("strategy/atr_mult", float(value))
+
+
+def get_strategy_risk_pct() -> float:
+    """Risk-per-trade as a FRACTION of equity (0.005 = 0.5%)."""
+    return _as_float(_qs().value("strategy/risk_pct"), 0.005)
+
+
+def set_strategy_risk_pct(value: float) -> None:
+    _qs().setValue("strategy/risk_pct", float(value))
+
+
+def get_strategy_timeframe_minutes() -> int:
+    """Bar timeframe for the trend engine. 1440 = daily (matches the backtest)."""
+    return _as_int(_qs().value("strategy/timeframe_minutes"), 1440)
+
+
+def set_strategy_timeframe_minutes(value: int) -> None:
+    _qs().setValue("strategy/timeframe_minutes", int(value))
+
+
+def get_strategy_poll_seconds() -> int:
+    return max(1, _as_int(_qs().value("strategy/poll_seconds"), 30))
+
+
+def set_strategy_poll_seconds(value: int) -> None:
+    _qs().setValue("strategy/poll_seconds", int(value))
+
+
+def parse_pairs(text: str) -> list[str]:
+    """Split a comma/space-separated pair list into upper-cased altnames."""
+    parts = text.replace(",", " ").split()
+    return [p.strip().upper() for p in parts if p.strip()]
+
+
+def get_strategy_pairs() -> list[str]:
+    """Target pairs as Kraken altnames (e.g. 'XBTUSD'). Never empty."""
+    raw = _qs().value("strategy/pairs")
+    pairs = parse_pairs(str(raw)) if raw else []
+    return pairs or list(_DEFAULT_STRATEGY_PAIRS)
+
+
+def set_strategy_pairs(pairs: list[str]) -> None:
+    _qs().setValue("strategy/pairs", ", ".join(parse_pairs(", ".join(pairs))))
 
 
 # ---------- app ----------
