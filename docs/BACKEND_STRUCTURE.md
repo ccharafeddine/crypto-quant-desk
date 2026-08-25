@@ -116,6 +116,21 @@ Append-only; never edited; never contains keys. `source` exists so the future au
 - `performance.py`: `build_equity_curve(ledgers|trades, ohlc_closes) -> pd.Series`; `realized_pnl(trades) -> per-asset + total (per quote currency)`; `trade_stats(round_trips) -> {win_rate, avg_win, avg_loss, expectancy, profit_factor}`; reuses `metrics.max_drawdown/drawdown_series`.
 - `cost_basis.py` rework (audit findings 1 & 3): group trades **per (asset, quote)**; true average-cost method (sells reduce quantity at running avg cost, realized PnL captured separately; basis can never go negative); result carries `quote` for label-aware display ("cost basis (BTC)"). Never sum across quote currencies.
 
+## Signals engine + service (Expansion v2.2 — pure engine + one thin service)
+
+Pure engine (numpy/pandas/pydantic only, deterministic, no I/O — the hard rule holds):
+- `engine/indicators.py`: `sma`, `atr`, `rsi`, `donchian` (prior-N channel **shifted** to exclude the current bar — the look-ahead guard, pinned by a regression test).
+- `engine/signals.py`: `StrategyParams`, `TradeSetup`, `TrendState`, and a minimal engine-local `PairSpec` (the engine never imports `trading/`); `trend_state()` + `evaluate_setup(candles, params, equity, pair_spec) -> TradeSetup | None` (ATR stop, risk-based size floored to lot precision, **fail-closed below min**, 5:1 leverage cap, trend-only confidence, advisory `daily_room`/`total_room`).
+- `engine/microstructure.py`: `book_features`, `detect_walls`, `expected_fill`, `entry_timing` — execution timing only, conservative (unknown/thin/one-sided book → `WAIT`, never `GO`); consumes a depth snapshot, never fetches.
+- `engine/backtest.py`: `walk_forward(candles, params, limits) -> StrategyStats` (pass/bust/unresolved under `PropLimits`, expectancy, profit factor, max DD, regime; seedless). Reuses `evaluate_setup` bar-by-bar so it measures the exact live logic. `classify_exit`/`trade_summary` shared with the live record.
+
+Impure, thin (the only I/O seam): `ui/signals_service.py` `SignalsService` (a `QObject`). On a timer + `SymbolHub.changed` it pulls `get_ohlc`+`get_depth`, keeps a bounded imbalance deque for `flow_delta`, runs the pure `evaluate_snapshot`, and emits `setup_updated(TradeSetup|None, BookFeatures, FillEstimate, TimingVerdict)` + `stats_updated(StrategyStats|None, live-summary)`. A per-symbol generation guard drops stale responses. It caches the backtest per symbol and resolves a pending setup against strictly-later bars into the track log. **No order path** — the panel's "Send to ticket" is the only bridge, and it only pre-fills.
+
+### Track record — `signals-track.jsonl` (append-only, one JSON object per line)
+`data/track_record.py`: `SignalRecord` (symbol, direction, entry, stop, target, size_base, risk_quote, rr, confidence, created_ts, outcome `pending|win|loss`, exit_price, pnl_quote, resolved_ts). One line is appended when a setup **resolves** (stop/target hit on a later bar); `summarize_records` reuses `trade_summary` and reports an honest low-sample state below `MIN_LIVE_SAMPLES`.
+
+Added QSettings keys: `strategy/enabled` (bool, default false), `strategy/variant`, `strategy/{fast,slow,trend,atr_len}` (int), `strategy/atr_mult` (float), `strategy/risk_pct` (fraction, default 0.005), `strategy/account_equity` (float, sizing = prop account size), `strategy/timeframe_minutes` (default 1440), `strategy/poll_seconds` (default 30), `strategy/pairs` (comma list).
+
 ## Known defects to fix in Phase 1 (from the 2026-07-09 logic audit)
 
 Contract-level requirements; details in IMPLEMENTATION_PLAN 1.x:

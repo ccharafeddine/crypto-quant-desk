@@ -1,5 +1,11 @@
 # SIGNALS_PLAN.md — Expansion v2.2: Signals, Trade Setups & Order-Flow
 
+> **STATUS: COMPLETE (2026-08-25).** S1–S5 delivered and merged to `main` (CI green);
+> the docs (PRD F13/F14, IMPLEMENTATION_PLAN "Expansion v2.2") reflect it. The three
+> §0 lines held throughout: signals-only (no signal→order path), pure engine, no new
+> deps. Remaining is owner-side verification — an end-to-end run with Strategy enabled
+> and reconciling `walk_forward` against STRATEGY.md's private data (F13 AC).
+
 Adds a **signal engine** that turns the backtested strategy into concrete, sized
 trade setups, and an **order-flow (L2) layer** that improves *entry timing and
 execution* on those setups. Same discipline as every prior phase: engine stays
@@ -95,13 +101,13 @@ positive. That is the trap this design avoids.
 
 ---
 
-## S0 — Encode the plan (this doc)
+## S0 — Encode the plan (this doc) — ✅ DONE
 - **S0.1** Add this file; cross-link from `IMPLEMENTATION_PLAN.md` (new "Expansion
   v2.2") and add PRD acceptance criteria F13 (signals) + F14 (order-flow).
 - **S0.2** Settings surface reserved: a **Strategy** tab spec in `APP_FLOW.md`
   (params, target pairs, enable/disable, risk-per-trade %). No code yet.
 
-## S1 — Signal engine (pure)
+## S1 — Signal engine (pure) — ✅ DONE
 *(engine stays pure; tests in the same step; known-input vectors)*
 
 - **S1.1** `engine/indicators.py`: `sma(series, n)`, `atr(candles, n)`,
@@ -127,7 +133,7 @@ positive. That is the trap this design avoids.
   limits given current equity and start-of-day equity) so the panel can show
   "setup suppressed: daily loss room < one unit of risk." Pure; inputs passed in.
 
-## S2 — Order-flow engine (pure)
+## S2 — Order-flow engine (pure) — ✅ DONE
 - **S2.1** `engine/microstructure.py` models: `BookFeatures` (`mid, microprice,
   spread_abs, spread_bps, imbalance_l5/l10/l25, depth_bid_bps, depth_ask_bps`),
   `Wall` (`side, price, size, dist_bps, z`), `FillEstimate` (`side, notional,
@@ -148,7 +154,7 @@ positive. That is the trap this design avoids.
   optional `flow_delta` (imbalance change) from the service buffer. Fully tested
   truth-table.
 
-## S3 — Service + wiring (impure, thin)
+## S3 — Service + wiring (impure, thin) — ✅ DONE
 - **S3.1** `SignalsService` (in `ui/services.py` or `data/signals_service.py`):
   on a timer and on `SymbolHub.changed`, pull `get_ohlc(pair, interval)` +
   `get_depth(pair, count)`, keep a bounded rolling deque of recent depth snapshots
@@ -160,7 +166,7 @@ positive. That is the trap this design avoids.
   params, risk-per-trade %, target pairs, poll interval, enable/disable; persisted
   via `settings_store`. Fail-safe defaults = STRATEGY.md v1.
 
-## S4 — Backtest & track record (pure) — replaces "provable" with "measured"
+## S4 — Backtest & track record (pure) — replaces "provable" with "measured" — ✅ DONE
 - **S4.1** `engine/backtest.py`: `walk_forward(candles, params, limits) ->
   StrategyStats` (pass/bust/unresolved under the prop limits, expectancy, profit
   factor, max DD, trades, regime tag). Deterministic (seedless; no RNG). Mirrors
@@ -171,7 +177,7 @@ positive. That is the trap this design avoids.
   the panel shows backtest **and** live stats side by side. Honest empty-state
   until enough live samples.
 
-## S5 — Panel + analyst + alerts
+## S5 — Panel + analyst + alerts — ✅ DONE
 - **S5.1** `ui/panels/signals.py` (`SignalsPanel`): header (symbol/timeframe via
   `PanelHeader`); **Setup** card (direction, entry ref, stop, size in base/quote,
   risk in quote, R:R, confidence, rationale, prop-room warnings); **Execution

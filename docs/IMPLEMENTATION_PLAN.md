@@ -119,6 +119,18 @@ New initiative (started 2026-07-09), parallel to the pending Phase 6/7 work. Tur
 ### Expansion dependency notes
 E1 precedes everything (it is the host). E2 layers on E1. E3 panels register into the E1 workspace and use the E2 header controls. E4 reuses existing engine + `data/returns.py`; E4c needs ledger history (Phase 2.4, done). E5 requires E1–E4.
 
+## Expansion v2.2 — Signals, Trade Setups & Order-Flow — **COMPLETE (2026-08-25)**
+
+Full spec: `docs/SIGNALS_PLAN.md`. Turns the backtested strategy into concrete, sized **trade setups** and adds an **order-flow (L2) layer** for entry timing/execution — advisory only, no path from a signal to an order (PRD F13/F14). Same discipline: engine stays pure; each step is a module + tests; every step ends `pytest -q` green + `ruff check` clean.
+
+- **S1 — Signal engine (pure)** ✅ `engine/indicators.py` (sma/atr/rsi + look-ahead-guarded donchian) and `engine/signals.py` (`StrategyParams`, `TradeSetup`, `trend_state`, `evaluate_setup` with ATR stop, risk-based sizing, 5:1 cap, trend-only confidence, advisory prop-room).
+- **S2 — Order-flow engine (pure)** ✅ `engine/microstructure.py` (`book_features`, `detect_walls`, `expected_fill`, `entry_timing`) — execution timing only, conservative (unknown/thin/one-sided → WAIT).
+- **S3 — Service + settings** ✅ `ui/signals_service.py` (`SignalsService` + pure `evaluate_snapshot`, generation guard, flow buffer) + Strategy settings tab (fail-safe to v1 defaults).
+- **S4 — Backtest & track record (pure)** ✅ `engine/backtest.py` (`walk_forward` → pass/bust/unresolved + expectancy/PF/DD/regime) + `data/track_record.py` (append-only JSONL of resolved live outcomes).
+- **S5 — Panel + analyst + alerts** ✅ `ui/panels/signals.py` (`SignalsPanel`, "Send to ticket" pre-fill only), main-window wiring, `analyst/context.py` `signals_snapshot`, and a `signal_state` alert kind.
+
+Owner-side verification (not code): end-to-end run with Strategy enabled; reconcile `walk_forward` against STRATEGY.md's private data (F13 AC). Deferred polish: analyst "narrate this setup" button, live-portfolio equity option, live poll-interval change without restart.
+
 ## Phase 8 — Deferred (post-v1 roadmap, not scheduled)
 
 Autotrader host (strategy hooks onto OrderService + PaperBroker gates), multi-account profiles, trade-from-chart drag orders, historical USD conversion for crypto-quoted cost bases, risk-metric alert kinds if cut from 5.3, macOS packaging revival, more themes.

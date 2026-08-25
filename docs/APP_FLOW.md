@@ -114,6 +114,13 @@ Exit → if live orders were placed this session, no special handling (orders li
 2. Each section pulls engine-computed values off the current portfolio snapshot + history; every metric carries its footnote. Insufficient history → per-metric `n/a` with the reason, never a crash.
 3. Scenario & stress controls (shock size, Monte Carlo horizon/paths, what-if position delta) are inputs that re-run the pure engine and redraw; nothing touches live data or the money path.
 
+### FL-13 Signals (Expansion v2.2)
+1. Enable signals in **Settings > Strategy** (variant, MA/ATR params, risk-per-trade %, account equity, timeframe, poll interval, target pairs, enable/disable). Off by default (opt-in, like live trading); bad manual values fail safe to the STRATEGY.md v1 defaults.
+2. `signals_panel` follows the active symbol (FL-W2). While enabled it polls OHLC + depth, runs the pure engine, and shows: a **Setup** card (direction, entry, stop, size in base/quote, risk, R:R, targets, trend-only confidence, rationale, prop-room warnings); an **Execution overlay** (mid/microprice, spread bps, imbalance, est. fill VWAP/slippage, a `GO`/`WAIT`/`CAUTION` timing verdict + reasons); and a **Track record** (backtest vs live stats, honest low-sample note). No setup → a clear no-signal/armed state; a failed pull → error state with Retry.
+3. **Send to ticket** pre-fills `ticket_panel` (pair, price, size only — a buy limit) for the user to review and submit. It NEVER submits and never changes mode; this is the only bridge from a signal to the ticket (FL-4 pre-fill path). The money path is unchanged.
+4. Alerts: a "Setup armed/active for pair" rule (FL-7) fires a toast when the live state reaches the target, so the owner is notified without watching. The analyst can narrate the current setup + execution context over engine-computed numbers only (FL-8).
+5. Live outcomes: each emitted setup is tracked and, when its stop or target is hit on a later bar, recorded to the local track-record log; the panel's live expectancy updates. Nothing here is automated execution — Kraken's prop rules forbid it (PRD F13/F14 non-goal).
+
 ## Redirect logic summary
 
 - After key save: stay in Settings with success state; panels refresh behind dialog.

@@ -101,6 +101,24 @@ All computed from Kraken data (OHLC + ledgers/trades) plus the static sector map
 - **AC12.4 Scenario & stress**: historical shock replay, Monte Carlo NAV projection, what-if position sizing, drawdown-recovery analytics.
 - **AC12.5** Every metric is engine-computed (pure, tested); the analyst panel may narrate them but never invents them.
 
+## Signal features (Expansion v2.2 — DELIVERED)
+
+Added after F10–F12. Turns the backtested strategy into concrete, sized **trade setups** and layers an **order-flow (L2)** read for entry timing. Advisory only: the app proposes setups; the user still places every order through the ticket. There is **no code path from a signal to an order** (Kraken Prop/Breakout prohibits third-party automation — signals-only by rule, not just choice). Full spec: `docs/SIGNALS_PLAN.md`.
+
+### F13. Signal engine & trade setups
+Direction comes from a trend strategy on the chosen timeframe; sizing/risk is prop-aware.
+- **AC13.1** For a chosen pair the panel shows a correct, **sized** `TradeSetup` (direction, entry, ATR stop, size in base/quote, risk in quote, R:R, targets, trend-only confidence, rationale) — or a clear no-signal/armed state — updating on symbol change and the poll interval.
+- **AC13.2** Sizing risks `risk_pct` of equity to the stop, rounds to pair precision, **fails closed** below the pair minimum, and respects a 5:1 leverage cap; confidence is derived from trend strength only, never order-book data.
+- **AC13.3** Advisory prop-room fields (distance to the 3% daily / 5% total limits) let the panel flag a setup that should be suppressed; the engine is pure and exhaustively tested.
+- **AC13.4** "Send to ticket" pre-fills the ticket (pair, price, size) only; it never submits and never changes trading mode. The money path is unchanged.
+- **AC13.5** The strategy is **measured, not promised**: `walk_forward` backtests it (pass/bust/unresolved under the prop limits, expectancy, profit factor, drawdown, regime) and live signal outcomes are tracked, so the panel shows backtest **and** live stats with an honest low-sample state.
+
+### F14. Order-flow execution timing (L2)
+Order-book imbalance is used for **execution/timing, never direction** (a noisy, spoofable, seconds-horizon quantity; treating it as multi-hour alpha invites overfitting).
+- **AC14.1** From a depth snapshot the panel shows mid, microprice, spread (bps), multi-depth imbalance, estimated fill VWAP/slippage for the setup size, and a wall map.
+- **AC14.2** A timing verdict (`GO`/`WAIT`/`CAUTION` + reasons) gates *when* to act on a setup, never the direction; it is **conservative by default** (unknown/thin/one-sided book → `WAIT`, never `GO`).
+- **AC14.3** A "setup armed/active" alert kind notifies the owner without watching; the analyst can narrate the setup + execution context over engine-computed numbers only.
+
 ## User stories
 
 - As the owner, I want my Kraken keys stored in Windows Credential Manager via a Settings dialog, so that no plaintext secret exists on disk or in the repo.
@@ -125,7 +143,7 @@ All computed from Kraken data (OHLC + ledgers/trades) plus the static sector map
 
 ## Non-goals (explicitly out of scope for v1)
 
-- The autotrader itself (strategies, signals, scheduling). v1 only ships the interfaces it will use: order service, paper engine, audit log.
+- The **autotrader** itself (automated execution, scheduling). Prohibited by the prop rules; off the table by rule, not just choice. v2.2 ships **advisory signals** (F13/F14) that only ever pre-fill the ticket — the private strategy logic still lives in a separate repo; only its interfaces (order service, paper engine, audit log `source`) exist here.
 - Multi-account profiles.
 - Trade-from-chart (click/drag order placement) — roadmap phase 4+.
 - Futures, margin, staking/earn actions. Spot only. (Staked sub-balances still display, folded into base assets.)
