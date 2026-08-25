@@ -356,13 +356,45 @@ Last session: 2026-07-10
   engine/backtest.py walk_forward + live track record; S5 SignalsPanel + analyst
   signals_snapshot + "setup armed" alert rule.
 
+- 2026-08-25: CI FIX - pinned ruff>=0.15.20,<0.16 (commit 5c7a34d, pushed, CI green).
+  CI installed unpinned ruff 0.16.4 whose broadened DEFAULT ruleset (BLE001/RUF100/
+  UP041) flagged ~75 pre-existing patterns repo-wide (incl. money-path files) while the
+  local pre-commit hook lints with 0.15.x and passes - main went red on tooling, not
+  code (both the S1+S2 and S3 pushes had failed CI on this, unnoticed). Pin keeps CI
+  reproducible + matched to the hook; adopting a newer ruff + clearing findings is a
+  separate deliberate change (would churn unrelated/money-path files). NOTE for future
+  sessions: after pushing, verify `gh run list` goes green - the pre-commit hook uses the
+  local (older) ruff, so a clean hook does NOT guarantee CI passes if ruff drifts again.
+
+- 2026-08-25: Expansion v2.2 S4 COMPLETE (backtest + track record; awaiting owner review
+  before S5). 411 passed (33 new), ruff clean. Pure/deterministic, no order path, no new
+  deps. engine/backtest.py (PURE, seedless): walk_forward(candles, params, limits) ->
+  StrategyStats(outcome pass|bust|unresolved, trades/wins/losses, win_rate, expectancy,
+  profit_factor, avg_win/loss, max_drawdown, total_return, final_equity, regime bull|bear|
+  chop). REUSES evaluate_setup bar-by-bar over expanding history (measures the exact live
+  logic, no drift) with a frictionless _BACKTEST_SPEC; one long position, enter on
+  LONG_ACTIVE at entry_ref, exit via classify_exit (STOP-first when a bar spans both =
+  conservative), daily/total loss checked vs worst intrabar mark, PASS vs best intrabar
+  mark; optional fee_bps (default 0). PropLimits pydantic (starting_equity, daily 3%/total
+  5%/profit_target 8%, fee_bps). Undefined ratios = None (JSON-safe, not NaN/inf).
+  trade_summary(pnls) shared with the live record. data/track_record.py (append-only JSONL
+  a la audit.py, data->engine import only): SignalRecord (+from_setup, target=furthest R),
+  resolve_record (uses the SAME classify_exit as the backtest), summarize_records (reuses
+  trade_summary + pending/total_pnl/enough; MIN_LIVE_SAMPLES=20 honest empty/low-sample
+  state), TrackRecordLog(append/read/summary). DECISIONS (documented, flagged - STRATEGY.md
+  is in the private repo so exact method unverifiable here): frictionless sizing (no lot/min
+  rounding), stop-first pessimistic fills, worst-intrabar-mark as the conservative stand-in
+  for the "hourly" prop equity check, fees off by default, take-profit = furthest (3R)
+  target. AC3 (reproduce STRATEGY.md metrics within tolerance) is the OWNER's reconcile vs
+  their private data. NOT YET: S5 SignalsPanel + wire SignalsService/backtest/track record
+  into main_window + analyst signals_snapshot + "setup armed" alert.
+
 ## Next (all need the owner's machines)
-- Expansion v2.2 S4-S5 (after owner review of S3): S4 engine/backtest.py walk_forward
-  (pass/bust/unresolved under prop limits, expectancy, PF, max DD, regime tag; seedless)
-  + live track-record JSONL; S5 SignalsPanel (setup card + execution overlay + track
-  record, "Send to ticket" pre-fill only) + wire SignalsService into main_window
-  (SymbolHub.changed -> service.set_symbol, setup_updated -> panel) + analyst
-  signals_snapshot + "setup armed/triggered" alert rule. Signals stay signals-only.
+- Expansion v2.2 S5 (after owner review of S4): SignalsPanel (setup card + execution
+  overlay + backtest-vs-live track record, "Send to ticket" pre-fill only, no auto-submit)
+  + wire SignalsService/backtest/track record into main_window (SymbolHub.changed ->
+  service.set_symbol, setup_updated -> panel, resolve pending setups -> TrackRecordLog) +
+  analyst signals_snapshot + "setup armed/triggered" alert rule. Signals stay signals-only.
 - Windows installer: install Inno Setup 6, run ISCC on packaging\windows\installer.iss
   -> dist\installer\crypto-quant-desk-2.0.0-setup.exe. (.iss written but not yet compiled.)
 - macOS build: on a Mac, `pyinstaller packaging/crypto-quant-desk.spec` then
