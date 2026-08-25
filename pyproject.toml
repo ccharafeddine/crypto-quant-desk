@@ -31,7 +31,12 @@ dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
     "pytest-qt>=4.4",
-    "ruff>=0.5",
+    # Pin the ruff minor: 0.16 broadened the DEFAULT rule set (BLE001, RUF100,
+    # UP041, ...), which would flag ~75 pre-existing patterns across the repo
+    # (incl. money-path files) and float CI away from the local pre-commit
+    # linter. Pinning keeps CI reproducible and matched to the hook; adopting a
+    # newer ruff + clearing its findings is a separate, deliberate change.
+    "ruff>=0.15.20,<0.16",
     "pyinstaller>=6.0",
 ]
 
