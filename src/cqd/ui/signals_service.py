@@ -29,6 +29,8 @@ from pydantic import ValidationError
 from cqd.data.client import make_client
 from cqd.data.errors import KrakenError
 from cqd.data.symbols import Symbol
+from cqd.data.track_record import SignalRecord, TrackRecordLog, resolve_record
+from cqd.engine.backtest import PropLimits, walk_forward
 from cqd.engine.microstructure import (
     BookFeatures,
     FillEstimate,
@@ -38,7 +40,7 @@ from cqd.engine.microstructure import (
     entry_timing,
     expected_fill,
 )
-from cqd.engine.signals import PairSpec, StrategyParams, TradeSetup, evaluate_setup
+from cqd.engine.signals import PairSpec, StrategyParams, TradeSetup, TrendState, evaluate_setup
 from cqd.ui import settings_store as store
 
 _log = logging.getLogger("cqd")
@@ -47,6 +49,8 @@ _log = logging.getLogger("cqd")
 DEPTH_COUNT = 25
 #: How many recent imbalance readings the flow buffer keeps for `flow_delta`.
 FLOW_WINDOW = 5
+#: Cap the backtest window so the per-symbol replay stays snappy on the GUI loop.
+BACKTEST_BARS = 400
 
 
 def build_strategy_params() -> StrategyParams:
@@ -154,6 +158,8 @@ class SignalsService(QObject):
 
     #: (TradeSetup | None, BookFeatures, FillEstimate, TimingVerdict)
     setup_updated = Signal(object, object, object, object)
+    #: (StrategyStats | None, live-summary dict | None) - backtest + live record.
+    stats_updated = Signal(object, object)
     #: A human-readable failure for the panel's error state.
     error = Signal(str)
 
@@ -164,9 +170,11 @@ class SignalsService(QObject):
         params_provider: Callable[[], StrategyParams] = build_strategy_params,
         spec_provider: Callable[[Symbol], Awaitable[PairSpec | None]] = _default_spec_provider,
         client_factory: Callable[[], object] = make_client,
+        track_log: TrackRecordLog | None = None,
         poll_ms: int | None = None,
         interval_minutes: int | None = None,
         depth_count: int = DEPTH_COUNT,
+        backtest_bars: int = BACKTEST_BARS,
         parent=None,
     ) -> None:
         super().__init__(parent)
@@ -174,11 +182,16 @@ class SignalsService(QObject):
         self._params_provider = params_provider
         self._spec_provider = spec_provider
         self._client_factory = client_factory
+        self._track_log = track_log
         self._interval = interval_minutes or store.get_strategy_timeframe_minutes()
         self._depth_count = depth_count
+        self._backtest_bars = backtest_bars
         self._symbol: Symbol | None = None
         self._gen = 0
         self._flow: deque[float] = deque(maxlen=FLOW_WINDOW)
+        self._pending: SignalRecord | None = None  # setup awaiting a stop/target
+        self._backtest_symbol: Symbol | None = None
+        self._backtest_stats = None
 
         self._timer = QTimer(self)
         self._timer.setInterval(poll_ms or store.get_strategy_poll_seconds() * 1000)
@@ -193,9 +206,10 @@ class SignalsService(QObject):
         self._timer.stop()
 
     def set_symbol(self, symbol: Symbol) -> None:
-        """Follow a new active symbol: reset the flow buffer and pull now."""
+        """Follow a new active symbol: reset per-symbol state and pull now."""
         self._symbol = symbol
         self._flow.clear()
+        self._pending = None  # a pending setup belongs to the old symbol
         self._trigger()
 
     def refresh(self) -> None:
@@ -253,18 +267,65 @@ class SignalsService(QObject):
         if not self._is_current(gen, symbol):
             return
 
+        equity = self._equity_provider()
+        # Resolve a prior pending setup against the newest bar (records on a hit).
+        self._resolve_pending(candles)
+
         prev = self._flow[0] if self._flow else None
         snapshot = evaluate_snapshot(
             candles,
             depth,
             self._params_provider(),
-            self._equity_provider(),
+            equity,
             spec,
             prev_imbalance=prev,
         )
         if snapshot.imbalance is not None:
             self._flow.append(snapshot.imbalance)
         self.setup_updated.emit(snapshot.setup, snapshot.features, snapshot.fill, snapshot.verdict)
+
+        # Start tracking a fresh active setup; it is logged when it resolves.
+        if (
+            self._track_log is not None
+            and self._pending is None
+            and snapshot.setup is not None
+            and snapshot.setup.state == TrendState.LONG_ACTIVE
+        ):
+            self._pending = SignalRecord.from_setup(snapshot.setup)
+
+        self._emit_stats(candles, symbol, equity)
+
+    # ---------- track record + backtest ----------
+
+    def _resolve_pending(self, candles: list) -> None:
+        """Resolve the pending setup against the latest bar, but only a bar AFTER
+        the entry bar (strictly later timestamp - no same-bar look-ahead)."""
+        if self._track_log is None or self._pending is None or not candles:
+            return
+        last = candles[-1]
+        if int(last.time) <= self._pending.created_ts:
+            return
+        resolved = resolve_record(self._pending, last.high, last.low, resolved_ts=int(last.time))
+        if resolved.outcome != "pending":
+            self._track_log.append(resolved)
+            self._pending = None
+
+    def _emit_stats(self, candles: list, symbol: Symbol, equity: float) -> None:
+        if symbol != self._backtest_symbol:  # backtest is per-symbol; cache it
+            self._backtest_symbol = symbol
+            self._backtest_stats = self._run_backtest(candles, equity)
+        live = self._track_log.summary() if self._track_log is not None else None
+        self.stats_updated.emit(self._backtest_stats, live)
+
+    def _run_backtest(self, candles: list, equity: float):
+        if equity <= 0 or len(candles) < 2:
+            return None
+        window = candles[-self._backtest_bars :]
+        try:
+            return walk_forward(window, self._params_provider(), PropLimits(starting_equity=equity))
+        except Exception:  # noqa: BLE001 - a backtest error must not kill the poll
+            _log.exception("signals backtest failed")
+            return None
 
 
 __all__ = [

@@ -282,6 +282,20 @@ class TicketPanel(Panel):
         if altname and altname != self.pair_combo.currentText():
             self.pair_combo.setCurrentText(altname)
 
+    def prefill_setup(self, altname: str, price: float, volume: float) -> None:
+        """Pre-fill a buy LIMIT from a signal setup (pair, price, size). Never
+        auto-submits and never changes mode - the user reviews and sends. This is
+        the ONLY bridge from a signal to the ticket; there is no direct path from
+        a signal to an order."""
+        candidates = [n for n in self._specs if n.upper() == (altname or "").upper()]
+        if candidates:
+            self.pair_combo.setCurrentText(candidates[0])
+        self.side_combo.setCurrentText("buy")
+        self.type_combo.setCurrentText("limit")  # reveals the price field via _on_type_changed
+        self.price_edit.setText(f"{price:.8g}")
+        self.volume_edit.setText(f"{volume:.10f}".rstrip("0").rstrip("."))
+        self.problems_label.setText("Review the pre-filled setup, then submit.")
+
     # ---------- submit flow ----------
 
     def refresh_mode_badge(self) -> None:

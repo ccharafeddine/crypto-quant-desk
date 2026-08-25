@@ -36,9 +36,12 @@ from cqd.ui.panels.orders import OrdersPanel
 from cqd.ui.panels.performance import PerformancePanel
 from cqd.ui.panels.positions import PositionsPanel
 from cqd.ui.panels.risk import RiskPanel
+from cqd.ui.panels.signals import SignalsPanel
 from cqd.ui.panels.tape import TapePanel
 from cqd.ui.panels.ticket import TicketPanel
 from cqd.ui.panels.watchlist import WatchlistPanel
+from cqd.data.track_record import TrackRecordLog
+from cqd.ui.signals_service import SignalsService
 from cqd.ui.stream import StreamBridge
 from cqd.ui.symbol_hub import SymbolHub
 from cqd.ui.theme import (
@@ -53,9 +56,17 @@ from cqd.ui.widgets import Badge
 from cqd.ui.workspace import PRESET_NAMES, Workspace
 
 
+_TIMEFRAME_LABELS = {60: "1H", 240: "4H", 1440: "1D", 10080: "1W"}
+
+
+def _timeframe_label(minutes: int) -> str:
+    return _TIMEFRAME_LABELS.get(minutes, f"{minutes}m")
+
+
 class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
+        self._signals_symbol = None
         self._is_demo = resolve_demo()
         self.setWindowTitle(
             "Crypto Quant Desk (Demo data)" if self._is_demo else "Crypto Quant Desk"
@@ -71,6 +82,7 @@ class MainWindow(QMainWindow):
         self._build_menus()
         self._build_status_bar()
         self._build_stream()
+        self._build_signals()
 
     def _build_header(self) -> None:
         """Slim in-window header bar above the docks (identity + mode badge)."""
@@ -106,6 +118,7 @@ class MainWindow(QMainWindow):
         self.book_panel = BookPanel(self)
         self.tape_panel = TapePanel(self)
         self.analytics_panel = AnalyticsPanel(self)
+        self.signals_panel = SignalsPanel(self)
 
         # Adjustable card workspace (QtAds): register every panel under a stable
         # key, build the shipped perspectives, then restore last session's
@@ -123,6 +136,7 @@ class MainWindow(QMainWindow):
         self.workspace.add_panel("alerts", "Alerts", self.alerts_panel)
         self.workspace.add_panel("analyst", "Analyst", self.analyst_panel)
         self.workspace.add_panel("analytics", "Analytics", self.analytics_panel)
+        self.workspace.add_panel("signals", "Signals", self.signals_panel)
         self.workspace.ensure_presets(self._settings)
         self.workspace.restore_state(self._settings)
         # Theme the QtAds chrome now that the manager exists (the __init__
@@ -135,6 +149,8 @@ class MainWindow(QMainWindow):
         self.ticket_panel.order_submitted.connect(self.orders_panel.refresh)
         self.positions_panel.close_requested.connect(self.ticket_panel.prefill_close)
         self.book_panel.price_clicked.connect(self.ticket_panel.set_price)
+        # A signal setup only ever PRE-FILLS the ticket (never submits).
+        self.signals_panel.send_to_ticket.connect(self.ticket_panel.prefill_setup)
 
         # Active-symbol bus: the watchlist and the ticket are the two selection
         # sources; the hub normalizes and fans one change out to every panel
@@ -155,6 +171,16 @@ class MainWindow(QMainWindow):
         if stream is not None:
             stream.ensure_symbols([symbol.ws])
             stream.ensure_trades([symbol.ws])
+        # Signals follow the active symbol too (only when the engine is enabled).
+        self._signals_symbol = symbol
+        self.signals_panel.set_context(
+            symbol.ws, _timeframe_label(store.get_strategy_timeframe_minutes())
+        )
+        enabled = store.get_strategy_enabled()
+        self.signals_panel.set_enabled_state(enabled)
+        svc = getattr(self, "signals_service", None)
+        if svc is not None and enabled:
+            svc.set_symbol(symbol)
 
     def _build_menus(self) -> None:
         menubar = self.menuBar()
@@ -351,6 +377,45 @@ class MainWindow(QMainWindow):
         if fired:
             self.alerts_panel.on_fired()
 
+    # ---------- signals ----------
+
+    def _build_signals(self) -> None:
+        """The signal engine service: polls OHLC+depth for the active symbol,
+        feeds the panel, fires 'setup armed/active' alerts, and records the live
+        track record. Advisory only - it can only pre-fill the ticket."""
+        self.signals_service = SignalsService(
+            equity_provider=store.get_strategy_account_equity,
+            track_log=TrackRecordLog(),
+            parent=self,
+        )
+        self.signals_service.setup_updated.connect(self._on_signal_update)
+        self.signals_service.stats_updated.connect(self.signals_panel.on_stats_update)
+        self.signals_service.error.connect(self.signals_panel.on_error)
+        self.signals_panel.refresh_requested.connect(self.signals_service.refresh)
+        if store.get_strategy_enabled():
+            self.signals_service.start()
+
+    def _on_signal_update(self, setup, features, fill, verdict) -> None:
+        self.signals_panel.on_setup_update(setup, features, fill, verdict)
+        if setup is not None:
+            symbol_ws, state = setup.symbol, setup.state.value
+        elif self._signals_symbol is not None:
+            symbol_ws, state = self._signals_symbol.ws, "flat"
+        else:
+            return
+        self._handle_fired(services.alert_engine().on_signal(symbol_ws, state))
+
+    def _reconfigure_signals(self) -> None:
+        """Start/stop the signal engine when Settings > Strategy changes."""
+        enabled = store.get_strategy_enabled()
+        self.signals_panel.set_enabled_state(enabled)
+        if enabled:
+            self.signals_service.start()
+            if self._signals_symbol is not None:
+                self.signals_service.set_symbol(self._signals_symbol)
+        else:
+            self.signals_service.stop()
+
     def _on_stream_state(self, state: str) -> None:
         self._stream_label.setText(f"STREAM: {state.upper()}")
         self._stream_label.setProperty("streamState", state)
@@ -430,6 +495,8 @@ class MainWindow(QMainWindow):
         self.paper_action.setChecked(store.get_paper_mode())
         self.ticket_panel.refresh_mode_badge()
         self._update_status_message()
+        if getattr(self, "signals_service", None) is not None:
+            self._reconfigure_signals()
         self._refresh_all()
 
     def maybe_show_first_run(self) -> None:

@@ -19,17 +19,35 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-KINDS = ("price_above", "price_below", "position_pnl_pct", "portfolio_drawdown_pct")
+KINDS = (
+    "price_above",
+    "price_below",
+    "position_pnl_pct",
+    "portfolio_drawdown_pct",
+    "signal_state",
+)
+
+#: Signal states a `signal_state` rule can watch (ranked; a rule fires when the
+#: live state reaches AT LEAST its target, so "armed" also fires on "active").
+_SIGNAL_RANK = {"flat": 0, "long_armed": 1, "long_active": 2}
 
 _HISTORY_CAP = 200
 
 
 class AlertRule(BaseModel):
     id: str = Field(default_factory=lambda: uuid.uuid4().hex)
-    kind: Literal["price_above", "price_below", "position_pnl_pct", "portfolio_drawdown_pct"]
-    symbol: str | None = None  # "BTC/USD" for price kinds
+    kind: Literal[
+        "price_above",
+        "price_below",
+        "position_pnl_pct",
+        "portfolio_drawdown_pct",
+        "signal_state",
+    ]
+    symbol: str | None = None  # "BTC/USD" for price kinds and signal_state
     asset: str | None = None  # bare symbol for position_pnl_pct
-    threshold: float  # price level, pnl %, or drawdown % (positive magnitude)
+    #: Price level / pnl % / drawdown % for numeric kinds; for signal_state it is
+    #: the target-state rank (1 = armed, 2 = active).
+    threshold: float
     repeat: bool = False
     enabled: bool = True
     armed: bool = True  # edge-trigger state; rearms when the condition resets
@@ -43,6 +61,9 @@ class AlertRule(BaseModel):
             return f"{self.symbol} below {self.threshold:,.8g}"
         if self.kind == "position_pnl_pct":
             return f"{self.asset} PnL beyond ±{self.threshold:g}%"
+        if self.kind == "signal_state":
+            target = "active" if self.threshold >= 2 else "armed"
+            return f"{self.symbol} setup {target}"
         return f"Portfolio drawdown beyond {self.threshold:g}%"
 
 
@@ -132,6 +153,25 @@ class AlertEngine:
                 continue
             met = magnitude >= rule.threshold
             hit = self._edge(rule, met, magnitude, f"Portfolio drawdown {magnitude:.1f}%")
+            if hit:
+                fired.append(hit)
+        return fired
+
+    def on_signal(self, symbol: str, state: str) -> list[FiredAlert]:
+        """Fire when a pair's live signal state reaches a rule's target state.
+
+        `state` is a `TrendState` value ("flat"/"long_armed"/"long_active"). A
+        rule targeting "armed" also fires on "active" (the stronger state), and
+        rearms only when the pair falls back below its target (edge-triggered).
+        """
+        rank = _SIGNAL_RANK.get(state, 0)
+        fired: list[FiredAlert] = []
+        for rule in self.rules:
+            if rule.kind != "signal_state" or rule.symbol != symbol:
+                continue
+            met = rank >= rule.threshold
+            target = "active" if rule.threshold >= 2 else "armed"
+            hit = self._edge(rule, met, rank, f"{symbol} setup {target} (now {state})")
             if hit:
                 fired.append(hit)
         return fired

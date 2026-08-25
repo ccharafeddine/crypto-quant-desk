@@ -295,6 +295,12 @@ class SettingsDialog(QDialog):
         self.strategy_risk.setSuffix(" %")
         self.strategy_risk.setValue(store.get_strategy_risk_pct() * 100.0)
 
+        self.strategy_equity = QDoubleSpinBox()  # sizing/backtest account equity
+        self.strategy_equity.setRange(1.0, 1_000_000_000.0)
+        self.strategy_equity.setDecimals(2)
+        self.strategy_equity.setPrefix("$")
+        self.strategy_equity.setValue(store.get_strategy_account_equity())
+
         self.strategy_timeframe = QComboBox()
         for label, minutes in (
             ("1 hour", 60),
@@ -331,6 +337,7 @@ class SettingsDialog(QDialog):
         form.addRow("ATR length", self.strategy_atr_len)
         form.addRow("ATR stop multiple", self.strategy_atr_mult)
         form.addRow("Risk per trade", self.strategy_risk)
+        form.addRow("Account equity (sizing)", self.strategy_equity)
         form.addRow("Timeframe", self.strategy_timeframe)
         form.addRow("Poll interval", self.strategy_poll)
         form.addRow("Target pairs", self.strategy_pairs)
@@ -359,6 +366,7 @@ class SettingsDialog(QDialog):
         store.set_strategy_atr_len(self.strategy_atr_len.value())
         store.set_strategy_atr_mult(self.strategy_atr_mult.value())
         store.set_strategy_risk_pct(self.strategy_risk.value() / 100.0)
+        store.set_strategy_account_equity(self.strategy_equity.value())
         store.set_strategy_timeframe_minutes(self.strategy_timeframe.currentData())
         store.set_strategy_poll_seconds(self.strategy_poll.value())
         store.set_strategy_pairs(store.parse_pairs(self.strategy_pairs.text()))

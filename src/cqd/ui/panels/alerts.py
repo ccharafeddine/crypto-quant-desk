@@ -32,7 +32,12 @@ _KIND_LABELS = [
     ("price_below", "Price below"),
     ("position_pnl_pct", "Position PnL ±%"),
     ("portfolio_drawdown_pct", "Portfolio drawdown %"),
+    ("signal_armed", "Setup armed"),
+    ("signal_active", "Setup active"),
 ]
+
+#: The two setup-alert menu values map to one engine kind + a state-rank threshold.
+_SIGNAL_KINDS = {"signal_armed": 1, "signal_active": 2}
 
 
 class AlertsPanel(Panel):
@@ -88,7 +93,10 @@ class AlertsPanel(Panel):
 
     def _on_kind_changed(self) -> None:
         kind = self.kind_combo.currentData()
-        if kind in ("price_above", "price_below"):
+        # Setup alerts take a slash symbol and no numeric threshold (the state
+        # rank is implied by the menu choice).
+        self.threshold_spin.setEnabled(kind not in _SIGNAL_KINDS)
+        if kind in ("price_above", "price_below") or kind in _SIGNAL_KINDS:
             self.target_edit.setPlaceholderText("BTC/USD")
             self.target_edit.setEnabled(True)
         elif kind == "position_pnl_pct":
@@ -101,6 +109,24 @@ class AlertsPanel(Panel):
     def _on_add(self) -> None:
         kind = self.kind_combo.currentData()
         target = self.target_edit.text().strip().upper()
+
+        # Setup alerts: one engine kind (signal_state) + a state-rank threshold.
+        if kind in _SIGNAL_KINDS:
+            if "/" not in target:
+                self.status.setText("Setup alerts need a slash symbol like BTC/USD.")
+                return
+            rule = AlertRule(
+                kind="signal_state",
+                symbol=target,
+                threshold=_SIGNAL_KINDS[kind],
+                repeat=self.repeat_check.isChecked(),
+            )
+            services.alert_engine().add_rule(rule)
+            self.symbols_needed(target)
+            self.status.setText(f"Added: {rule.describe()}")
+            self._render()
+            return
+
         threshold = self.threshold_spin.value()
         if threshold <= 0:
             self.status.setText("Threshold must be positive.")

@@ -197,6 +197,20 @@ def set_strategy_poll_seconds(value: int) -> None:
     _qs().setValue("strategy/poll_seconds", int(value))
 
 
+def get_strategy_account_equity() -> float:
+    """Equity the strategy sizes against (the prop-challenge account size).
+
+    Deliberately a user-set number, not live mark-to-market: prop sizing is
+    against the account size, and it keeps the signal engine decoupled from the
+    portfolio. Also the backtest's starting equity.
+    """
+    return _as_float(_qs().value("strategy/account_equity"), 10_000.0)
+
+
+def set_strategy_account_equity(value: float) -> None:
+    _qs().setValue("strategy/account_equity", float(value))
+
+
 def parse_pairs(text: str) -> list[str]:
     """Split a comma/space-separated pair list into upper-cased altnames."""
     parts = text.replace(",", " ").split()

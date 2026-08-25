@@ -121,6 +121,63 @@ def trades_digest(trades: list[dict], realized_by_asset: dict[str, float]) -> di
     }
 
 
+def signals_snapshot(setup: Any, features: Any, verdict: Any, stats: Any) -> dict[str, Any]:
+    """Trade setup + execution context -> compact dict the model may narrate.
+
+    Every figure is engine-computed (evaluate_setup / book_features / entry_timing
+    / walk_forward) and only reshaped here - the AC7.3 guarantee. `None` fields
+    (no setup, one-sided book, undefined stat) pass through as JSON null so the
+    model says "not available" rather than inventing a number. Order-flow is
+    labeled execution-timing, never direction, so the narration can't turn L2
+    into an alpha call.
+    """
+    setup_block: dict[str, Any] | None = None
+    if setup is not None:
+        setup_block = {
+            "symbol": getattr(setup, "symbol", None),
+            "direction": getattr(setup, "direction", None),
+            "state": getattr(getattr(setup, "state", None), "value", None),
+            "entry_ref": _f(getattr(setup, "entry_ref", None)),
+            "stop": _f(getattr(setup, "stop", None)),
+            "size_base": _f(getattr(setup, "size_base", None)),
+            "size_quote": _f(getattr(setup, "size_quote", None)),
+            "risk_quote": _f(getattr(setup, "risk_quote", None)),
+            "targets": [_f(t) for t in (getattr(setup, "targets", None) or [])],
+            "reward_risk": _f(getattr(setup, "rr", None)),
+            "confidence_trend_only": _f(getattr(setup, "confidence", None)),
+            "daily_room": _f(getattr(setup, "daily_room", None)),
+            "total_room": _f(getattr(setup, "total_room", None)),
+        }
+
+    execution: dict[str, Any] = {"note": "order-flow times the entry only; it never sets direction"}
+    if features is not None:
+        execution.update(
+            {
+                "mid": _f(getattr(features, "mid", None)),
+                "microprice": _f(getattr(features, "microprice", None)),
+                "spread_bps": _f(getattr(features, "spread_bps", None)),
+                "imbalance_l10": _f(getattr(features, "imbalance_l10", None)),
+            }
+        )
+    if verdict is not None:
+        execution["timing_verdict"] = getattr(verdict, "verdict", None)
+        execution["timing_reasons"] = list(getattr(verdict, "reasons", None) or [])
+
+    track: dict[str, Any] | None = None
+    if stats is not None:
+        track = {
+            "outcome": getattr(stats, "outcome", None),
+            "trades": getattr(stats, "trades", None),
+            "win_rate": _f(getattr(stats, "win_rate", None)),
+            "expectancy": _f(getattr(stats, "expectancy", None)),
+            "profit_factor": _f(getattr(stats, "profit_factor", None)),
+            "max_drawdown": _f(getattr(stats, "max_drawdown", None)),
+            "regime": getattr(stats, "regime", None),
+        }
+
+    return {"setup": setup_block, "execution": execution, "backtest": track}
+
+
 def build_user_message(mode: str, context: dict[str, Any], question: str | None = None) -> str:
     """Assemble the user turn: an instruction line plus the engine JSON block."""
     blob = json.dumps(context, indent=2, sort_keys=True)
@@ -134,6 +191,14 @@ def build_user_message(mode: str, context: dict[str, Any], question: str | None 
         ask = (
             "Review my recent trading activity: what I did and what it realized "
             "(and cost in fees). Keep it to the numbers shown."
+        )
+    elif mode == "signals":
+        ask = (
+            "Explain the current trade setup and whether the order book is a "
+            "supportive moment to act on it: the sized entry/stop/risk, the "
+            "reward-to-risk, the trend-only confidence, the timing verdict and "
+            "its reasons, and how it has backtested. Describe, do not advise; "
+            "the order-flow read is about timing, not direction."
         )
     elif mode == "ask":
         ask = (question or "").strip() or "Summarize this portfolio."

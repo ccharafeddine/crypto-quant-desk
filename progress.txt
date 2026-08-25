@@ -389,12 +389,41 @@ Last session: 2026-07-10
   their private data. NOT YET: S5 SignalsPanel + wire SignalsService/backtest/track record
   into main_window + analyst signals_snapshot + "setup armed" alert.
 
+- 2026-08-25: Expansion v2.2 S5 COMPLETE (panel + full wiring) -> v2.2 SIGNALS DONE
+  (awaiting owner review). 423 passed (31 new), ruff clean; MainWindow builds in demo +
+  Signals panel grabbed (layout correct; tofu = known offscreen-font artifact). No order
+  path (Send-to-ticket only pre-fills), no new deps. NEW ui/panels/signals.py: pure
+  build_signals_view(setup,features,fill,verdict,backtest,live) -> SignalsView (all display
+  strings; tested without QApplication) + SignalsPanel widget (Setup card w/ prop-room
+  warnings, Execution overlay w/ GO/WAIT/CAUTION badge + reasons + slippage, Track record
+  backtest-vs-live, "Send to ticket" button -> send_to_ticket signal, enabled/off + error
+  states). analyst/context.py: signals_snapshot(setup,features,verdict,stats) engine-numbers-
+  only (AC7.3) + "signals" narration mode. alerts/engine.py: signal_state kind + on_signal
+  (edge-triggered, armed-fires-on-active, rearm) + AlertsPanel "Setup armed/active" menu
+  entries -> signal_state rule. ticket.prefill_setup(altname,price,volume) (buy limit, never
+  submits - the ONLY signal->ticket bridge). settings: strategy/account_equity (sizing =
+  prop-challenge account size, honest + decouples from portfolio) added to Strategy tab.
+  workspace: "signals" in PANEL_KEYS (13) + all 3 layouts (version bump discards stale
+  saved layouts). signals_service.py EXTENDED: stats_updated(StrategyStats|None, live dict)
+  signal; per-symbol cached backtest (walk_forward, capped BACKTEST_BARS=400 to stay snappy
+  on the GUI loop); live track-record resolution (holds a pending SignalRecord, resolves it
+  against strictly-later bars via classify_exit = no look-ahead, appends to TrackRecordLog on
+  a hit). main_window: SignalsService(equity=account_equity, TrackRecordLog) wired
+  SymbolHub.changed -> set_symbol (only when enabled), setup_updated -> panel + signal_state
+  alerts, stats_updated -> panel, send_to_ticket -> ticket.prefill_setup; start/stop on the
+  Settings > Strategy enable toggle (default OFF/opt-in). DECISIONS: account_equity is a
+  user setting (prop sizing is vs account size, not mark-to-market); backtest cached per
+  symbol (recompute only on selection) to bound the GUI-thread cost; live-resolution only on
+  bars strictly after the entry bar. DEFERRED (noted, not blocking): analyst panel has no
+  "narrate this setup" button yet (signals_snapshot is delivered+tested, wiring a button is
+  polish); poll-interval change needs an app restart to take effect.
+
 ## Next (all need the owner's machines)
-- Expansion v2.2 S5 (after owner review of S4): SignalsPanel (setup card + execution
-  overlay + backtest-vs-live track record, "Send to ticket" pre-fill only, no auto-submit)
-  + wire SignalsService/backtest/track record into main_window (SymbolHub.changed ->
-  service.set_symbol, setup_updated -> panel, resolve pending setups -> TrackRecordLog) +
-  analyst signals_snapshot + "setup armed/triggered" alert rule. Signals stay signals-only.
+- Expansion v2.2 verification on the owner's machine: enable Settings > Strategy, pick a
+  pair, confirm the Signals panel shows a sized setup + timing verdict + backtest/live, and
+  that "Send to ticket" pre-fills (never submits). Reconcile walk_forward vs STRATEGY.md's
+  private data (AC3). Optional polish: analyst "narrate current setup" button; live-portfolio
+  equity option; live poll-interval change without restart.
 - Windows installer: install Inno Setup 6, run ISCC on packaging\windows\installer.iss
   -> dist\installer\crypto-quant-desk-2.0.0-setup.exe. (.iss written but not yet compiled.)
 - macOS build: on a Mac, `pyinstaller packaging/crypto-quant-desk.spec` then

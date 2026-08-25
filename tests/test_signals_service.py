@@ -235,3 +235,41 @@ def test_service_ignores_kraken_error_from_spec_provider() -> None:
     assert len(got) == 1
     setup, features, _fill, _verdict = got[0]
     assert setup is None and features.mid == pytest.approx(16.0)
+
+
+# ---------- S5 additions: stats emission + live track record ----------
+
+
+def test_service_emits_backtest_and_live_stats(tmp_path) -> None:
+    from cqd.data.track_record import TrackRecordLog
+
+    svc = _service(_FakeClient(_candles(UPTREND), _book()), track_log=TrackRecordLog(tmp_path))
+    svc._symbol = BTC
+    stats = []
+    svc.stats_updated.connect(lambda *a: stats.append(a))
+    asyncio.run(svc.refresh_once(BTC))
+    assert len(stats) == 1
+    backtest, live = stats[0]
+    assert backtest is not None and backtest.outcome in {"pass", "bust", "unresolved"}
+    assert live is not None and live["trades"] == 0  # nothing resolved yet
+
+
+def test_service_records_resolved_setup(tmp_path) -> None:
+    from cqd.data.track_record import TrackRecordLog
+
+    log = TrackRecordLog(tmp_path)
+    svc = _service(_FakeClient(_candles(UPTREND), _book()), track_log=log)
+    svc._symbol = BTC
+    # First cycle: an active setup (entry 16, stop 13) becomes the pending record.
+    asyncio.run(svc.refresh_once(BTC))
+    assert svc._pending is not None and svc._pending.created_ts == _candles(UPTREND)[-1].time
+
+    # Second cycle: a LATER bar whose low pierces the stop -> a loss is recorded.
+    down = _candles(UPTREND) + [
+        Candle(time=1000 + 7 * 60, open=12.0, high=13.0, low=11.0, close=12.0, volume=1.0)
+    ]
+    svc._client_factory = lambda: _FakeClient(down, _book())
+    asyncio.run(svc.refresh_once(BTC))
+    records = log.read()
+    assert len(records) == 1 and records[0].outcome == "loss"
+    assert svc._pending is None
