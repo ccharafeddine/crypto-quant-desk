@@ -4,8 +4,10 @@ A cross-platform (Windows & macOS) desktop dashboard and trading terminal for a
 Kraken spot account: an adjustable card workspace with live positions and true
 cost basis, portfolio-level risk (volatility, BTC beta, concentration, risk
 contribution, tail metrics), Bloomberg-style analytics, real-time charts and
-market microstructure, and a full order suite with hard safety rails. A
-Claude-powered analyst panel narrates the numbers; the math engine computes them.
+market microstructure, and a full order suite with hard safety rails. A signal
+engine turns a backtested strategy into sized, risk-bounded trade setups with an
+order-flow read on entry timing — advisory only, it can only pre-fill the ticket.
+A Claude-powered analyst panel narrates the numbers; the math engine computes them.
 
 Personal-use software, MIT-licensed. It talks to Kraken's official APIs and
 nothing else: no third-party price feeds, no telemetry, and your API keys never
@@ -16,9 +18,11 @@ macOS Keychain — not on disk).
 
 ## Status
 
-**v2.0.0** — the core desk is feature-complete: adjustable workspace, live
-trading with rails, streaming market data, the analytics suite, and the AI
-analyst. Runs on Windows and macOS; a per-user Windows installer is built from
+**v2.0.0**, plus the **v2.2 signals expansion** (complete) — the core desk is
+feature-complete: adjustable workspace, live trading with rails, streaming market
+data, the analytics suite, the AI analyst, and now a signal engine (sized trade
+setups, order-flow entry timing, and a walk-forward backtest with a live track
+record). Runs on Windows and macOS; a per-user Windows installer is built from
 [`packaging/windows/`](packaging/windows/) and a macOS `.app`/`.dmg` from
 [`packaging/`](packaging/). The canonical spec lives in
 [`docs/`](docs/) (PRD, app flow, tech stack, frontend guidelines, backend
@@ -47,8 +51,14 @@ structure, implementation plan); session state is tracked in
   WebSocket
 - **Performance** — equity curve, realized/unrealized PnL history, drawdown,
   per-position stats, trade expectancy
-- **Alerts** — price/PnL/risk rules with native OS notifications (Windows toasts,
-  macOS Notification Center)
+- **Signals** — a trend strategy proposes a sized, risk-bounded trade setup
+  (entry, ATR stop, size, R:R, targets, trend-only confidence); an order-flow
+  overlay reads the book for entry timing (microprice, spread, imbalance,
+  estimated slippage, a GO/WAIT/CAUTION verdict); a walk-forward backtest and a
+  live track record show how it has done. "Send to ticket" only ever pre-fills —
+  there is no path from a signal to an order
+- **Alerts** — price/PnL/risk and setup-armed rules with native OS notifications
+  (Windows toasts, macOS Notification Center)
 - **Analyst** — rules-based narration for free; optional Claude analysis (your
   own Anthropic key, `claude-opus-4-8`) with portfolio commentary, trade review,
   and free-text Q&A, streamed and priced per call. It narrates engine output and
@@ -65,6 +75,11 @@ The workspace ships three saved perspectives (all shown here on demo data).
 **Analysis** — full ratio panel, order ticket, and alerts:
 
 ![Analysis perspective](docs/screenshots/analysis.png)
+
+**Signals** — a sized trade setup, the order-flow timing verdict, and the
+backtest-vs-live track record (advisory only; "Send to ticket" never submits):
+
+![Signals panel](docs/screenshots/signals.png)
 
 ## Safety model
 
@@ -110,8 +125,9 @@ python -m cqd
 
 ```
 src/cqd/
-├── engine/     # pure math: risk, metrics, cost basis, performance (no I/O)
-├── data/       # Kraken REST + WebSocket clients, normalizer, credentials
+├── engine/     # pure math: risk, metrics, cost basis, performance, signals,
+│               #   indicators, order-flow microstructure, backtest (no I/O)
+├── data/       # Kraken REST + WebSocket clients, normalizer, credentials, track record
 ├── trading/    # order service, paper broker, limits, audit log
 ├── alerts/     # rule engine + native OS notifications (Windows/macOS)
 ├── analyst/    # rules narration + optional Claude integration (grounded, priced)
