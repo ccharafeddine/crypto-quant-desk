@@ -1,0 +1,281 @@
+{
+ "source": "Kraken public Trades (first trade at/after each edge)",
+ "windows": [
+  {
+   "key": "luna_2022",
+   "label": "LUNA / UST collapse",
+   "start": "2022-05-05T00:00",
+   "end": "2022-05-12T12:00",
+   "note": "UST lost its peg and LUNA went to zero; contagion across majors.",
+   "assets": {
+    "BTC": {
+     "start": 39677.6,
+     "end": 28229.8,
+     "return": -0.28852
+    },
+    "ETH": {
+     "start": 2940.37,
+     "end": 1935.75,
+     "return": -0.341664
+    },
+    "SOL": {
+     "start": 92.86,
+     "end": 43.77,
+     "return": -0.528645
+    },
+    "XRP": {
+     "start": 0.64568,
+     "end": 0.37524,
+     "return": -0.418845
+    },
+    "ADA": {
+     "start": 0.898383,
+     "end": 0.457918,
+     "return": -0.490286
+    },
+    "DOT": {
+     "start": 16.3199,
+     "end": 8.1658,
+     "return": -0.499642
+    },
+    "LINK": {
+     "start": 12.19972,
+     "end": 6.26839,
+     "return": -0.486186
+    },
+    "LTC": {
+     "start": 106.27,
+     "end": 62.2,
+     "return": -0.414698
+    },
+    "DOGE": {
+     "start": 0.1359267,
+     "end": 0.0771262,
+     "return": -0.43259
+    },
+    "AVAX": {
+     "start": 67.32,
+     "end": 28.03,
+     "return": -0.58363
+    },
+    "USDC": {
+     "start": 1.0,
+     "end": 1.0017,
+     "return": 0.0017
+    },
+    "USDT": {
+     "start": 0.9998,
+     "end": 0.991,
+     "return": -0.008802
+    }
+   }
+  },
+  {
+   "key": "ftx_2022",
+   "label": "FTX collapse",
+   "start": "2022-11-06T00:00",
+   "end": "2022-11-09T22:00",
+   "note": "Run on FTX/Alameda; exchange insolvency, withdrawals halted.",
+   "assets": {
+    "BTC": {
+     "start": 21300.1,
+     "end": 15721.5,
+     "return": -0.261905
+    },
+    "ETH": {
+     "start": 1627.4,
+     "end": 1105.32,
+     "return": -0.320806
+    },
+    "SOL": {
+     "start": 36.89,
+     "end": 12.61,
+     "return": -0.658173
+    },
+    "XRP": {
+     "start": 0.4932,
+     "end": 0.3323,
+     "return": -0.326237
+    },
+    "ADA": {
+     "start": 0.426691,
+     "end": 0.312155,
+     "return": -0.268428
+    },
+    "DOT": {
+     "start": 7.0234,
+     "end": 5.4326,
+     "return": -0.2265
+    },
+    "LINK": {
+     "start": 8.66835,
+     "end": 5.91668,
+     "return": -0.317439
+    },
+    "LTC": {
+     "start": 69.23,
+     "end": 49.14,
+     "return": -0.290192
+    },
+    "DOGE": {
+     "start": 0.1245043,
+     "end": 0.0720699,
+     "return": -0.421145
+    },
+    "AVAX": {
+     "start": 19.6,
+     "end": 12.38,
+     "return": -0.368367
+    },
+    "USDC": {
+     "start": 0.9999,
+     "end": 1.0,
+     "return": 0.0001
+    },
+    "USDT": {
+     "start": 1.0,
+     "end": 0.9986,
+     "return": -0.0014
+    }
+   }
+  },
+  {
+   "key": "yen_carry_2024",
+   "label": "5 Aug 2024 carry unwind",
+   "start": "2024-08-02T00:00",
+   "end": "2024-08-05T06:00",
+   "note": "Yen carry-trade unwind; global risk-off, thin weekend crypto liquidity.",
+   "assets": {
+    "BTC": {
+     "start": 65300.1,
+     "end": 52725.6,
+     "return": -0.192565
+    },
+    "ETH": {
+     "start": 3201.94,
+     "end": 2311.27,
+     "return": -0.278166
+    },
+    "SOL": {
+     "start": 167.24,
+     "end": 118.6,
+     "return": -0.29084
+    },
+    "XRP": {
+     "start": 0.59564,
+     "end": 0.4682,
+     "return": -0.213955
+    },
+    "ADA": {
+     "start": 0.392179,
+     "end": 0.303327,
+     "return": -0.22656
+    },
+    "DOT": {
+     "start": 5.335,
+     "end": 3.9201,
+     "return": -0.265211
+    },
+    "LINK": {
+     "start": 12.8789,
+     "end": 8.94638,
+     "return": -0.305346
+    },
+    "LTC": {
+     "start": 69.5,
+     "end": 54.8,
+     "return": -0.211511
+    },
+    "DOGE": {
+     "start": 0.1190237,
+     "end": 0.0896231,
+     "return": -0.247015
+    },
+    "AVAX": {
+     "start": 25.7,
+     "end": 18.85,
+     "return": -0.266537
+    },
+    "USDC": {
+     "start": 1.0,
+     "end": 0.9999,
+     "return": -0.0001
+    },
+    "USDT": {
+     "start": 0.99911,
+     "end": 0.99998,
+     "return": 0.000871
+    }
+   }
+  },
+  {
+   "key": "oct10_2025",
+   "label": "10 Oct 2025 liquidation cascade",
+   "start": "2025-10-10T12:00",
+   "end": "2025-10-10T21:20",
+   "note": "Tariff headline into a record leveraged long book; alts gapped far more than BTC.",
+   "assets": {
+    "BTC": {
+     "start": 121589.9,
+     "end": 105412.3,
+     "return": -0.133051
+    },
+    "ETH": {
+     "start": 4345.33,
+     "end": 3513.12,
+     "return": -0.191518
+    },
+    "SOL": {
+     "start": 221.18,
+     "end": 171.8,
+     "return": -0.223257
+    },
+    "XRP": {
+     "start": 2.81922,
+     "end": 1.58983,
+     "return": -0.436075
+    },
+    "ADA": {
+     "start": 0.817966,
+     "end": 0.522934,
+     "return": -0.36069
+    },
+    "DOT": {
+     "start": 4.1804,
+     "end": 3.0301,
+     "return": -0.275165
+    },
+    "LINK": {
+     "start": 22.42174,
+     "end": 11.41737,
+     "return": -0.49079
+    },
+    "LTC": {
+     "start": 132.22,
+     "end": 73.5,
+     "return": -0.444108
+    },
+    "DOGE": {
+     "start": 0.2508727,
+     "end": 0.1131515,
+     "return": -0.548968
+    },
+    "AVAX": {
+     "start": 28.28,
+     "end": 11.41,
+     "return": -0.596535
+    },
+    "USDC": {
+     "start": 0.9997,
+     "end": 0.9998,
+     "return": 0.0001
+    },
+    "USDT": {
+     "start": 1.0001,
+     "end": 1.00038,
+     "return": 0.00028
+    }
+   }
+  }
+ ]
+}
