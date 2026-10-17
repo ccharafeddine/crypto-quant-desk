@@ -5,7 +5,7 @@ description = "A standalone desktop quant analytics app for Kraken portfolios"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
-authors = [{ name = "Joe" }]
+authors = [{ name = "Chafic Charafeddine" }]
 dependencies = [
     "PySide6>=6.7",
     # Qt Advanced Docking System: the adjustable card-panel workspace (float,
