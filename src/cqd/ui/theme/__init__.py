@@ -1,11 +1,15 @@
-"""Token-driven theme registry.
+"""Token-driven theme registry: Graphite.
 
 One QSS template, interpolated with a small set of design tokens, drives the
-whole app. Themes differ only by their accent (and share a deep near-black base),
-so switching is purely cosmetic and never touches data or computation.
+whole app. Graphite is a near-black graphite ground with ONE amber accent
+(#F59E0B, the logo's candle). Green/red are reserved for profit and loss; buy
+and sell are neutral side labels; `warning` is a separate, muted ochre so a
+caution never reads as the brand accent. A high-contrast variant keeps the
+same roles with stronger text and borders for accessibility. Switching is
+purely cosmetic and never touches data or computation.
 
-Type system: every numeric/data surface (tables, metric/value labels) uses the
-mono stack; everything else uses the native system UI font. Headers are heavier.
+Type system: Inter (bundled, OFL) for UI text and JetBrains Mono (bundled, OFL)
+for every numeric/data surface, so figures are tabular and columns line up.
 """
 
 from __future__ import annotations
@@ -15,26 +19,25 @@ from string import Template
 
 from PySide6.QtCore import QSettings
 
-# Font stacks: system UI for prose/labels, mono for all numbers/data. Qt's QSS
-# does not understand the CSS "-apple-system" keyword (it treats it as a literal,
-# missing family and logs a slow font-alias warning at startup), so we lead with
-# Qt-resolvable named families: Windows first, macOS fallbacks after.
-_FONT_UI = '"Segoe UI", "Helvetica Neue", "Arial", sans-serif'
-_FONT_MONO = '"Cascadia Mono", "Consolas", "Menlo", "SF Mono", monospace'
+# Bundled families lead (registered by cqd.ui.assets.load_fonts at startup);
+# platform fallbacks follow. Qt's QSS does not understand "-apple-system", so
+# only Qt-resolvable named families are listed.
+_FONT_UI = '"Inter", "Segoe UI", "Helvetica Neue", "Arial", sans-serif'
+_FONT_MONO = '"JetBrains Mono", "Cascadia Mono", "Consolas", "Menlo", monospace'
 
 
 @dataclass(frozen=True)
 class Theme:
-    """Design tokens for one theme. Only `accent` varies across the shipped set.
+    """Design tokens for one theme.
 
-    Elevation is a three-step ramp on a near-black canvas: `bg` (window) <
-    `surface` (card) < `surface_raised` (headers, tab bars, hover) < `elevated`
-    (dialogs, floating docks, tooltips). Borders come in two weights: `border`
-    (default 1px separators) and `border_strong` (active/focused edges).
+    Elevation is a ramp on the graphite canvas: `bg` (window) < `nav` (left
+    rail) < `surface` (card) < `surface_raised` (headers, hover) < `elevated`
+    (dialogs, tooltips). `accent_fg` is the text colour ON an accent fill.
     """
 
     name: str
     bg: str
+    nav: str
     surface: str
     surface_raised: str
     elevated: str
@@ -42,37 +45,63 @@ class Theme:
     border_strong: str
     text: str
     text_muted: str
+    text_faint: str
     accent: str
+    accent_fg: str
+    accent_dim: str
     positive: str
     negative: str
+    warning: str
     font_ui: str = _FONT_UI
     font_mono: str = _FONT_MONO
 
 
-# Shared deep near-black base; each theme is the base plus one confident accent.
-_BASE = dict(
-    bg="#0B0D10",
-    surface="#14171C",
-    surface_raised="#1B1F27",
-    elevated="#22262F",
-    border="#232830",
-    border_strong="#333B47",
-    text="#E6E9EF",
-    text_muted="#8A93A2",
-    positive="#2FBF71",
-    negative="#E5484D",
-)
-
-DEFAULT_THEME_NAME = "Slate"
+DEFAULT_THEME_NAME = "Graphite"
 
 THEMES: dict[str, Theme] = {
-    # Cool blue - the default identity.
-    "Slate": Theme(name="Slate", accent="#5B8CFF", **_BASE),
-    # Bitcoin orange (the former contest-era default, debranded).
-    "Amber": Theme(name="Amber", accent="#F7931A", **_BASE),
-    # Cool teal.
-    "Teal": Theme(name="Teal", accent="#2DD4BF", **_BASE),
+    "Graphite": Theme(
+        name="Graphite",
+        bg="#0E1114",
+        nav="#101418",
+        surface="#12161A",
+        surface_raised="#171C22",
+        elevated="#1D232A",
+        border="#22272E",
+        border_strong="#2D333B",
+        text="#E6EDF3",
+        text_muted="#8B949E",
+        text_faint="#636E7B",
+        accent="#F59E0B",
+        accent_fg="#111111",
+        accent_dim="#6B4A0E",
+        positive="#3FB950",
+        negative="#F47067",
+        warning="#C69026",
+    ),
+    # Accessibility: same roles, brighter text, heavier borders, purer P&L hues.
+    "Graphite High Contrast": Theme(
+        name="Graphite High Contrast",
+        bg="#000000",
+        nav="#05070A",
+        surface="#0A0D10",
+        surface_raised="#141A20",
+        elevated="#1C232B",
+        border="#4A5560",
+        border_strong="#7D8995",
+        text="#FFFFFF",
+        text_muted="#C9D1D9",
+        text_faint="#A0AAB4",
+        accent="#FFB020",
+        accent_fg="#000000",
+        accent_dim="#A86E00",
+        positive="#56D364",
+        negative="#FF7B72",
+        warning="#E3B341",
+    ),
 }
+
+#: Names shipped before Graphite map onto it so a saved choice never breaks.
+_LEGACY_NAMES = {"Slate": "Graphite", "Amber": "Graphite", "Teal": "Graphite"}
 
 
 # One shared QSS template. Tokens are ${name}; QSS uses no '$' so substitution is
@@ -85,193 +114,231 @@ QMainWindow, QWidget {
     font-family: ${font_ui};
     font-size: 13px;
 }
+QToolTip { background: ${elevated}; color: ${text}; border: 1px solid ${border_strong}; padding: 4px 6px; }
 
 QMenuBar {
-    background-color: ${surface_raised};
+    background-color: ${surface};
     border-bottom: 1px solid ${border};
-    padding: 3px 4px;
+    padding: 2px 4px;
+    color: ${text_muted};
 }
-QMenuBar::item { background: transparent; padding: 4px 10px; border-radius: 4px; }
-QMenuBar::item:selected { background: ${border}; }
+QMenuBar::item { background: transparent; padding: 3px 10px; border-radius: 3px; }
+QMenuBar::item:selected { background: ${surface_raised}; color: ${text}; }
 
 QMenu {
-    background-color: ${surface};
-    border: 1px solid ${border};
+    background-color: ${elevated};
+    border: 1px solid ${border_strong};
     padding: 4px;
 }
-QMenu::item { padding: 6px 18px; border-radius: 4px; }
-QMenu::item:selected { background: ${border}; color: ${text}; }
+QMenu::item { padding: 6px 18px; border-radius: 3px; }
+QMenu::item:selected { background: ${surface_raised}; color: ${text}; }
 QMenu::item:checked { color: ${accent}; }
 QMenu::separator { height: 1px; background: ${border}; margin: 4px 8px; }
 
-/* Dock chrome is removed in code (custom empty title bar); panels carry their
-   own header. This keeps any residual dock title text legible. */
 QDockWidget { color: ${text_muted}; titlebar-close-icon: none; titlebar-normal-icon: none; }
 
-/* Slim app header bar (lives above the docks). */
+/* ---- App shell: header strip, KPI strip, left nav ---- */
 QToolBar#appHeaderBar {
-    background-color: ${surface_raised};
+    background-color: ${surface};
     border: none;
     border-bottom: 1px solid ${border};
-    padding: 6px 12px;
+    padding: 4px 12px;
     spacing: 10px;
 }
-QLabel[role="app-title"] { font-size: 14px; font-weight: 700; color: ${text}; letter-spacing: 0.2px; }
+QLabel[role="app-title"] { font-size: 13px; font-weight: 600; color: ${text}; }
+QLabel[role="header-key"] { font-size: 12px; color: ${text_faint}; }
+QLabel[role="header-value"] { font-size: 13px; font-weight: 600; color: ${text}; font-family: ${font_mono}; }
+QLabel[tone="pos"] { color: ${positive}; }
+QLabel[tone="neg"] { color: ${negative}; }
+QLabel[tone="accent"] { color: ${accent}; }
+QLabel[tone="warn"] { color: ${warning}; }
+QLabel[tone="muted"] { color: ${text_muted}; }
 
-/* Per-panel header row: a slim eyebrow that reads as a section label beneath
-   the dock tab, not a competing title. */
+#kpiStrip { background: ${surface}; border: 1px solid ${border}; }
+#kpiCell { border-right: 1px solid ${border}; background: transparent; }
+QLabel[role="kpi-label"] {
+    font-size: 10px; font-weight: 600; color: ${text_faint};
+    text-transform: uppercase; letter-spacing: 0.6px;
+}
+QLabel[role="kpi-value"] { font-size: 17px; font-weight: 500; color: ${text}; font-family: ${font_mono}; }
+QLabel[role="kpi-value"][tone="pos"] { color: ${positive}; }
+QLabel[role="kpi-value"][tone="neg"] { color: ${negative}; }
+QLabel[role="kpi-sub"] { font-size: 11px; color: ${text_faint}; }
+
+QLabel[role="page-title"] { font-size: 18px; font-weight: 600; color: ${text}; }
+QLabel[role="page-sub"] { font-size: 12px; color: ${text_faint}; }
+
+#navRail { background: ${nav}; border: none; border-right: 1px solid ${border}; }
+QLabel[role="nav-section"] {
+    font-size: 10px; font-weight: 600; color: ${text_faint};
+    text-transform: uppercase; letter-spacing: 0.8px; padding: 12px 16px 4px 16px;
+}
+QPushButton[role="nav-item"] {
+    background: transparent; border: none; border-left: 2px solid transparent;
+    border-radius: 0; color: ${text_muted}; text-align: left; padding: 5px 14px;
+}
+QPushButton[role="nav-item"]:hover { color: ${text}; background: ${surface}; }
+QPushButton[role="nav-item"]:checked {
+    color: ${text}; background: ${surface_raised}; border-left: 2px solid ${accent};
+}
+
+/* Per-panel header row: the card's section label. */
 #panelHeader { border-bottom: 1px solid ${border}; }
 QLabel[role="panel-title"] {
     font-size: 11px;
-    font-weight: 700;
+    font-weight: 600;
     color: ${text_muted};
     text-transform: uppercase;
     letter-spacing: 0.6px;
 }
 
 QStatusBar {
-    background: ${surface_raised};
+    background: ${surface};
     border-top: 1px solid ${border};
-    color: ${text_muted};
+    color: ${text_faint};
+    font-size: 11px;
 }
 QStatusBar::item { border: none; }
 
-/* ---- Tabs: dock tab bars (tabified panels) and QTabWidget (Settings) ---- */
+/* ---- Tabs ---- */
 QTabWidget::pane { border: 1px solid ${border}; }
 QTabBar { background: transparent; }
 QTabBar::tab {
-    background: ${surface};
+    background: transparent;
     color: ${text_muted};
-    border: 1px solid ${border};
-    padding: 5px 14px;
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 5px 12px;
     margin-right: 2px;
-    border-top-left-radius: 4px;
-    border-top-right-radius: 4px;
 }
-QTabBar::tab:selected {
-    background: ${bg};
-    color: ${text};
-    border-bottom: 2px solid ${accent};
-}
+QTabBar::tab:selected { color: ${text}; border-bottom: 2px solid ${accent}; }
 QTabBar::tab:hover:!selected { color: ${text}; }
-/* Bottom-dock tab bars grow downward: mirror the rounding and accent edge. */
-QTabBar::tab:bottom {
-    border-top-left-radius: 0;
-    border-top-right-radius: 0;
-    border-bottom-left-radius: 4px;
-    border-bottom-right-radius: 4px;
-}
-QTabBar::tab:bottom:selected { border-bottom: 1px solid ${border}; border-top: 2px solid ${accent}; }
+QTabBar::tab:bottom:selected { border-bottom: none; border-top: 2px solid ${accent}; }
 
 QListWidget {
     background-color: ${bg};
     color: ${text};
     border: 1px solid ${border};
-    border-radius: 5px;
+    border-radius: 3px;
     font-family: ${font_mono};
 }
 QListWidget::item { padding: 3px 8px; }
-QListWidget::item:selected { background: ${accent}; color: ${bg}; }
+QListWidget::item:selected { background: ${surface_raised}; color: ${text}; }
 
-/* ---- Tables and all numeric data: mono, subtle row separators ---- */
+/* ---- Tables and numeric data: mono (tabular), hairline row separators ---- */
 QTableWidget, QTableView {
-    background-color: ${bg};
-    alternate-background-color: ${bg};
+    background-color: ${surface};
+    alternate-background-color: ${surface};
     gridline-color: ${border};
-    selection-background-color: ${accent};
-    selection-color: ${bg};
+    selection-background-color: ${surface_raised};
+    selection-color: ${text};
     border: none;
     font-family: ${font_mono};
+    font-size: 12px;
     outline: none;
 }
 QTableWidget::item, QTableView::item {
-    padding: 7px 10px;
-    border-bottom: 1px solid ${border};  /* thin row separator, not heavy slabs */
+    padding: 4px 8px;
+    border-bottom: 1px solid ${border};
 }
 QTableView::item:hover { background-color: ${surface_raised}; }
-QHeaderView { background-color: ${surface_raised}; }
+QHeaderView { background-color: ${surface}; }
 QHeaderView::section {
-    background-color: ${surface_raised};
-    color: ${text_muted};
+    background-color: ${surface};
+    color: ${text_faint};
     border: none;
-    border-bottom: 2px solid ${border};
-    padding: 9px 10px;
+    border-bottom: 1px solid ${border};
+    padding: 5px 8px;
     font-family: ${font_ui};
-    font-weight: 700;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
 }
-QTableCornerButton::section { background-color: ${surface_raised}; border: none; }
+QTableCornerButton::section { background-color: ${surface}; border: none; }
 
 QPushButton {
-    background-color: ${surface_raised};
+    background-color: transparent;
     color: ${text};
-    border: 1px solid ${border};
-    border-radius: 5px;
-    padding: 6px 14px;
+    border: 1px solid ${border_strong};
+    border-radius: 3px;
+    padding: 5px 12px;
 }
-QPushButton:hover { border-color: ${border_strong}; background-color: ${elevated}; }
-QPushButton:pressed { background-color: ${border}; }
-QPushButton:default { border-color: ${accent}; }
-/* Buttons embedded in table rows: compact, or the row height clips the text. */
+QPushButton:hover { border-color: ${text_faint}; background-color: ${surface_raised}; }
+QPushButton:pressed { background-color: ${elevated}; }
+QPushButton:default, QPushButton[role="primary"] {
+    background-color: ${accent}; border-color: ${accent}; color: ${accent_fg}; font-weight: 600;
+}
+QPushButton[role="primary"]:hover { background-color: ${accent}; border-color: ${text}; }
+QPushButton:disabled { color: ${text_faint}; border-color: ${border}; background: transparent; }
 QPushButton[role="table-action"] {
     padding: 1px 8px;
     font-size: 11px;
     min-height: 0;
 }
 
-QLineEdit, QTextEdit, QPlainTextEdit {
-    background-color: ${surface};
+QLineEdit, QTextEdit, QPlainTextEdit, QComboBox, QSpinBox, QDoubleSpinBox {
+    background-color: ${bg};
     color: ${text};
-    border: 1px solid ${border};
-    border-radius: 5px;
-    padding: 7px;
-    selection-background-color: ${accent};
-    selection-color: ${bg};
+    border: 1px solid ${border_strong};
+    border-radius: 3px;
+    padding: 5px 7px;
+    selection-background-color: ${accent_dim};
+    selection-color: ${text};
     font-family: ${font_mono};
 }
-QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus { border-color: ${accent}; }
-QLineEdit:disabled { color: ${text_muted}; background-color: ${bg}; }
+QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QComboBox:focus,
+QSpinBox:focus, QDoubleSpinBox:focus { border-color: ${accent}; }
+QLineEdit:disabled { color: ${text_faint}; background-color: ${surface}; }
+QComboBox QAbstractItemView { background: ${elevated}; border: 1px solid ${border_strong}; }
 
-QScrollBar:vertical { background: transparent; width: 10px; margin: 0; }
-QScrollBar::handle:vertical { background: ${border}; border-radius: 5px; min-height: 24px; }
-QScrollBar::handle:vertical:hover { background: ${accent}; }
+QCheckBox::indicator, QRadioButton::indicator { width: 13px; height: 13px; }
+
+QScrollBar:vertical { background: transparent; width: 9px; margin: 0; }
+QScrollBar::handle:vertical { background: ${border_strong}; border-radius: 4px; min-height: 24px; }
+QScrollBar::handle:vertical:hover { background: ${text_faint}; }
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
-QScrollBar:horizontal { background: transparent; height: 10px; margin: 0; }
-QScrollBar::handle:horizontal { background: ${border}; border-radius: 5px; min-width: 24px; }
-QScrollBar::handle:horizontal:hover { background: ${accent}; }
+QScrollBar:horizontal { background: transparent; height: 9px; margin: 0; }
+QScrollBar::handle:horizontal { background: ${border_strong}; border-radius: 4px; min-width: 24px; }
+QScrollBar::handle:horizontal:hover { background: ${text_faint}; }
 QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }
 
 /* ---- Role labels ---- */
 QLabel[role="title"] {
     font-size: 16px;
-    font-weight: 700;
+    font-weight: 600;
     color: ${text};
     padding-bottom: 2px;
 }
 QLabel[role="subtitle"] { font-size: 12px; color: ${text_muted}; }
-QLabel[role="footnote"] { font-size: 11px; color: ${text_muted}; }
-QLabel[role="metric-label"] { font-size: 11px; color: ${text_muted}; }
+QLabel[role="footnote"] { font-size: 11px; color: ${text_faint}; }
+QLabel[role="empty-state"] { font-size: 12px; color: ${text_muted}; padding: 10px 0; }
+QLabel[role="metric-label"] { font-size: 10px; color: ${text_faint}; text-transform: uppercase; letter-spacing: 0.5px; }
 QLabel[role="metric-value"] {
-    font-size: 22px;
-    font-weight: 600;
+    font-size: 18px;
+    font-weight: 500;
     color: ${text};
     font-family: ${font_mono};
 }
-/* Stream health indicator in the status bar. */
-QLabel[role="stream-state"] { font-size: 11px; font-weight: 700; padding-right: 6px; }
+QLabel[role="stream-state"] { font-size: 11px; font-weight: 600; padding-right: 6px; }
 QLabel[role="stream-state"][streamState="live"] { color: ${positive}; }
-QLabel[role="stream-state"][streamState="delayed"] { color: ${accent}; }
+QLabel[role="stream-state"][streamState="delayed"] { color: ${warning}; }
 QLabel[role="stream-state"][streamState="offline"] { color: ${negative}; }
 
-/* Small tinted pill - accent text + accent border on surface, never a fill. */
+/* Badges/chips: a hairline outline, never a fill. */
 QLabel[role="badge"] {
-    background-color: ${surface};
+    background-color: transparent;
     color: ${accent};
-    border: 1px solid ${accent};
-    border-radius: 9px;
-    padding: 2px 9px;
-    font-size: 11px;
-    font-weight: 700;
+    border: 1px solid ${accent_dim};
+    border-radius: 2px;
+    padding: 1px 7px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.6px;
 }
+QLabel[role="badge"][kind="neutral"] { color: ${text_muted}; border-color: ${border_strong}; }
+QLabel[role="badge"][kind="live"] { color: ${negative}; border-color: ${negative}; }
+QLabel[role="badge"][kind="go"] { color: ${positive}; border-color: ${positive}; }
+QLabel[role="badge"][kind="warn"] { color: ${warning}; border-color: ${warning}; }
 """
 )
 
@@ -290,41 +357,37 @@ _QTADS_QSS_TEMPLATE = Template(
     """
 /* ---- QtAds workspace chrome, themed over the shipped default ---- */
 ads--CDockContainerWidget { background: ${bg}; }
-ads--CDockContainerWidget ads--CDockSplitter::handle { background: ${border}; }
-ads--CDockContainerWidget ads--CDockSplitter::handle:hover { background: ${accent}; }
+ads--CDockContainerWidget ads--CDockSplitter::handle { background: ${bg}; }
+ads--CDockContainerWidget ads--CDockSplitter::handle:hover { background: ${accent_dim}; }
 
-/* Each docked group is a card on the darker canvas. */
+/* Each docked group is a flat card on the graphite canvas. */
 ads--CDockAreaWidget {
     background: ${surface};
     border: 1px solid ${border};
-    border-radius: 6px;
+    border-radius: 0;
 }
 ads--CDockAreaTitleBar {
-    background: ${surface_raised};
+    background: ${surface};
     border-bottom: 1px solid ${border};
-    padding: 1px 4px;
+    padding: 0 4px;
 }
 
-/* Tabs: muted by default; the active tab lifts to the card surface + accent edge. */
 ads--CDockWidgetTab {
     background: transparent;
     border: none;
-    padding: 5px 12px;
+    border-bottom: 2px solid transparent;
+    padding: 4px 10px;
 }
-ads--CDockWidgetTab[activeTab="true"] {
-    background: ${surface};
-    border-top: 2px solid ${accent};
-    border-top-left-radius: 4px;
-    border-top-right-radius: 4px;
+ads--CDockWidgetTab[activeTab="true"] { border-bottom: 2px solid ${accent}; }
+ads--CDockWidgetTab QLabel {
+    color: ${text_faint}; font-size: 11px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.5px;
 }
-ads--CDockWidgetTab QLabel { color: ${text_muted}; font-weight: 600; }
 ads--CDockWidgetTab[activeTab="true"] QLabel { color: ${text}; }
 
-/* Title-bar buttons (close/detach/tabs-menu): keep their icons, theme the hover. */
-ads--CTitleBarButton { background: transparent; border: none; padding: 3px; border-radius: 4px; }
-ads--CTitleBarButton:hover { background: ${border}; }
+ads--CTitleBarButton { background: transparent; border: none; padding: 3px; border-radius: 3px; }
+ads--CTitleBarButton:hover { background: ${surface_raised}; }
 
-/* Floating panels read as elevated windows. */
 ads--CFloatingDockContainer {
     background: ${bg};
     border: 1px solid ${border_strong};
@@ -345,8 +408,9 @@ def build_qtads_qss(theme: Theme) -> str:
 
 
 def get_theme(name: str | None) -> Theme:
-    """Resolve a theme by name, falling back to the default for unknown names."""
-    return THEMES.get(name or "", THEMES[DEFAULT_THEME_NAME])
+    """Resolve a theme by name (legacy names map to Graphite; unknown -> default)."""
+    name = _LEGACY_NAMES.get(name or "", name or "")
+    return THEMES.get(name, THEMES[DEFAULT_THEME_NAME])
 
 
 def default_theme() -> Theme:
@@ -361,9 +425,10 @@ def _settings() -> QSettings:
 
 
 def load_theme_name() -> str:
-    """Persisted theme name, defaulting to Slate when unset/unknown."""
+    """Persisted theme name, defaulting to Graphite when unset/unknown/legacy."""
     name = _settings().value("theme", DEFAULT_THEME_NAME)
     name = str(name) if name is not None else DEFAULT_THEME_NAME
+    name = _LEGACY_NAMES.get(name, name)
     return name if name in THEMES else DEFAULT_THEME_NAME
 
 

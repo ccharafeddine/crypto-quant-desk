@@ -30,7 +30,8 @@ SRC = os.path.join(REPO, "src")
 ICON = os.path.join(SPECPATH, "cqd.ico")
 VERSION_FILE = os.path.join(SPECPATH, "version_info.txt")
 
-datas = []
+# Bundled logo + fonts (cqd.ui.assets) must travel with the frozen app.
+datas = [(os.path.join(SRC, "cqd", "ui", "assets"), os.path.join("cqd", "ui", "assets"))]
 binaries = []
 hiddenimports = ["qasync"] + collect_submodules("pyqtgraph")
 

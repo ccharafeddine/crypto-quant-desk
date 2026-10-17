@@ -49,7 +49,12 @@ def run() -> int:
     app = QApplication(sys.argv)
     app.setApplicationName("Crypto Quant Desk")
     app.setOrganizationName("cqd")
-    # The theme stylesheet is applied by MainWindow from the theme registry.
+    # Bundled Inter + JetBrains Mono and the logo icon, before any widget
+    # exists; the Graphite stylesheet is applied by MainWindow.
+    from cqd.ui.assets import app_icon, load_fonts
+
+    load_fonts()
+    app.setWindowIcon(app_icon())
 
     # Persisted data-source choice -> CQD_DATA_SOURCE, BEFORE any panel builds
     # a client. An explicitly set env var (dev override) is respected because

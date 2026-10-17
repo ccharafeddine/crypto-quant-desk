@@ -28,7 +28,8 @@ REPO = os.path.dirname(os.path.abspath(SPECPATH))
 SRC = os.path.join(REPO, "src")
 ICON = os.path.join(SPECPATH, "windows", "cqd.icns")  # shared icon source
 
-datas = []
+# Bundled logo + fonts (cqd.ui.assets) must travel with the frozen app.
+datas = [(os.path.join(SRC, "cqd", "ui", "assets"), os.path.join("cqd", "ui", "assets"))]
 binaries = []
 hiddenimports = ["qasync"] + collect_submodules("pyqtgraph")
 
