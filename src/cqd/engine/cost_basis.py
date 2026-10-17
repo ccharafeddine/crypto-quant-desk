@@ -2,8 +2,11 @@
 
 True running average-cost method, computed per (asset, quote) group:
 
-- Buys raise the basis by their full cost.
+- Buys raise the basis by their full cost PLUS the buy fee (when the fee is in
+  the quote currency, which is how Kraken's TradesHistory reports it), so
+  `avg_cost` / break-even is what you actually paid per unit.
 - Sells release basis at the CURRENT average cost and realize PnL against it,
+  net of the sell fee,
   so a sell never changes the average cost of what remains and the basis can
   never go negative (the old net-cash method went negative after profitable
   partial sells).
@@ -43,6 +46,21 @@ class CostBasisResult:
         return self.avg_cost * multiple
 
 
+def quote_fee(trade: dict, quote: str) -> float:
+    """The trade's fee in its quote currency (0 if absent or in another asset).
+
+    Kraken charges trade fees in the quote currency; a fee tagged with some
+    other currency is not silently mixed into a quote-denominated basis.
+    """
+    fee = trade.get("fee")
+    if not isinstance(fee, dict):
+        return 0.0
+    currency = fee.get("currency")
+    if currency not in (None, "", quote):
+        return 0.0
+    return float(fee.get("cost", 0.0) or 0.0)
+
+
 def _zero(asset: str, quote: str) -> CostBasisResult:
     return CostBasisResult(asset, 0.0, 0.0, 0.0, 0.0, quote=quote)
 
@@ -65,9 +83,10 @@ def _accumulate(asset: str, quote: str, legs: list[dict]) -> CostBasisResult:
             fees += float(fee.get("cost", 0.0))
         if amount <= 0:
             continue
+        fee_q = quote_fee(t, quote)
         if t["side"] == "buy":
             qty += amount
-            basis += cost
+            basis += cost + fee_q
             continue
         # Sell: release basis at the running average, realize the difference.
         if amount > qty + _EPS:
@@ -76,7 +95,7 @@ def _accumulate(asset: str, quote: str, legs: list[dict]) -> CostBasisResult:
         if matched > 0:
             avg = basis / qty
             unit_price = cost / amount
-            realized += matched * (unit_price - avg)
+            realized += matched * (unit_price - avg) - fee_q * (matched / amount)
             basis -= matched * avg
             qty -= matched
         if qty < _EPS:

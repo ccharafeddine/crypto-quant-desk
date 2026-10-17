@@ -16,6 +16,8 @@ from dataclasses import dataclass
 
 import pandas as pd
 
+from cqd.engine.cost_basis import quote_fee
+
 #: USD-pegged assets valued at 1.0 in the equity curve (matches returns.py).
 CASH_ASSETS: frozenset[str] = frozenset({"USD", "USDT", "USDC", "DAI"})
 
@@ -275,13 +277,13 @@ def realized_trades(trades: list[dict]) -> list[RoundTrip]:
         for _, t in ordered:
             amount = float(t["amount"])
             cost = float(t["cost"])
-            fee = t.get("fee")
-            fee_cost = float(fee.get("cost", 0.0)) if isinstance(fee, dict) else 0.0
+            fee_cost = quote_fee(t, quote)
             if amount <= 0:
                 continue
             if t["side"] == "buy":
+                # Buy fees are part of what the position cost (same as cost_basis).
                 qty += amount
-                basis += cost
+                basis += cost + fee_cost
                 continue
             matched = min(amount, qty)
             if matched <= _EPS:
@@ -296,7 +298,7 @@ def realized_trades(trades: list[dict]) -> list[RoundTrip]:
                     entry_avg=avg,
                     exit_price=unit_price,
                     pnl=matched * (unit_price - avg),
-                    fee=fee_cost,
+                    fee=fee_cost * (matched / amount),  # sell fee on the matched part
                     timestamp=float(t.get("timestamp") or 0.0),
                 )
             )

@@ -205,3 +205,34 @@ def test_periodic_returns_shapes() -> None:
     assert (r["daily"] > 0).all()
     assert len(r["weekly"]) >= 7
     assert len(r["monthly"]) >= 1
+
+
+def test_realized_trades_include_both_fees_regression() -> None:
+    # Buy 1 @ 100 (fee 0.4), sell 0.5 @ 120 (fee 0.24): entry avg 100.4,
+    # gross 0.5 x 19.6 = 9.8, net of the sell fee 9.56. Same as cost_basis.
+    from cqd.engine.cost_basis import reconstruct_cost_basis
+
+    trades = [
+        {
+            "symbol": "SOL/USD",
+            "side": "buy",
+            "amount": 1.0,
+            "cost": 100.0,
+            "fee": {"cost": 0.4, "currency": "USD"},
+            "timestamp": 1.0,
+        },
+        {
+            "symbol": "SOL/USD",
+            "side": "sell",
+            "amount": 0.5,
+            "cost": 60.0,
+            "fee": {"cost": 0.24, "currency": "USD"},
+            "timestamp": 2.0,
+        },
+    ]
+    (rt,) = realized_trades(trades)
+    assert rt.entry_avg == pytest.approx(100.4)
+    assert rt.pnl - rt.fee == pytest.approx(9.56)
+    assert trade_stats([rt])["total_realized"] == pytest.approx(
+        reconstruct_cost_basis(trades, "SOL").realized_pnl
+    )

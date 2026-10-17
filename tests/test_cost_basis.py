@@ -1,5 +1,7 @@
 """Tests for cost basis reconstruction."""
 
+import pytest
+
 from cqd.engine.cost_basis import reconstruct_cost_basis
 
 
@@ -37,10 +39,11 @@ def test_single_buy() -> None:
     ]
     result = reconstruct_cost_basis(trades, "ADA")
     assert result.quantity == 1000.0
-    assert result.avg_cost == 0.001
+    # Buy fee is capitalized: (1.0 + 0.0026) / 1000. Was 0.001 (fee ignored).
+    assert result.avg_cost == pytest.approx(0.0010026)
     assert result.fees_paid == 0.0026
     assert result.quote == "USD"
-    assert result.break_even_price == 0.001
+    assert result.break_even_price == pytest.approx(0.0010026)
 
 
 def test_multiple_buys_running_average() -> None:
@@ -64,8 +67,8 @@ def test_multiple_buys_running_average() -> None:
     ]
     result = reconstruct_cost_basis(trades, "ADA")
     assert result.quantity == 2000.0
-    # 3.0 total cost / 2000 qty = 0.0015
-    assert abs(result.avg_cost - 0.0015) < 1e-9
+    # (3.0 cost + 0.0078 fees) / 2000 qty
+    assert result.avg_cost == pytest.approx(3.0078 / 2000)
 
 
 def test_buy_then_partial_sell_keeps_average_cost() -> None:
@@ -93,10 +96,10 @@ def test_buy_then_partial_sell_keeps_average_cost() -> None:
     ]
     result = reconstruct_cost_basis(trades, "ADA")
     assert result.quantity == 800.0
-    assert abs(result.avg_cost - 0.001) < 1e-12  # unchanged by the sell
-    assert abs(result.total_cost - 0.8) < 1e-12  # basis released at avg
-    # Realized: 200 sold at 0.002 against 0.001 basis = +0.2.
-    assert abs(result.realized_pnl - 0.2) < 1e-12
+    assert result.avg_cost == pytest.approx(0.0010026)  # unchanged by the sell
+    assert result.total_cost == pytest.approx(800 * 0.0010026)  # released at avg
+    # Realized: 200 x (0.002 - 0.0010026) less the 0.001 sell fee.
+    assert result.realized_pnl == pytest.approx(200 * (0.002 - 0.0010026) - 0.001)
     assert result.oversold is False
 
 
@@ -191,5 +194,47 @@ def test_required_price_for_multiple() -> None:
         }
     ]
     result = reconstruct_cost_basis(trades, "ADA")
-    assert abs(result.required_price_for_multiple(2.0) - 0.002) < 1e-9
-    assert abs(result.required_price_for_multiple(10.0) - 0.01) < 1e-9
+    assert result.required_price_for_multiple(2.0) == pytest.approx(0.0020052)
+    assert result.required_price_for_multiple(10.0) == pytest.approx(0.010026)
+
+
+def test_buy_fee_raises_break_even_regression() -> None:
+    # 1 BTC bought at 50,000 with a 0.40% taker fee: break-even is 50,200, not
+    # 50,000. Selling at exactly 50,000 (fee 200) must realize -400, not 0.
+    trades = [
+        {
+            "symbol": "BTC/USD",
+            "side": "buy",
+            "amount": 1.0,
+            "price": 50_000.0,
+            "cost": 50_000.0,
+            "fee": {"cost": 200.0, "currency": "USD"},
+        },
+    ]
+    held = reconstruct_cost_basis(trades, "BTC")
+    assert held.break_even_price == pytest.approx(50_200.0)
+    trades.append(
+        {
+            "symbol": "BTC/USD",
+            "side": "sell",
+            "amount": 1.0,
+            "price": 50_000.0,
+            "cost": 50_000.0,
+            "fee": {"cost": 200.0, "currency": "USD"},
+        }
+    )
+    assert reconstruct_cost_basis(trades, "BTC").realized_pnl == pytest.approx(-400.0)
+
+
+def test_fee_in_another_currency_is_not_mixed_into_quote_basis() -> None:
+    trades = [
+        {
+            "symbol": "BTC/USD",
+            "side": "buy",
+            "amount": 1.0,
+            "price": 100.0,
+            "cost": 100.0,
+            "fee": {"cost": 0.001, "currency": "BTC"},
+        },
+    ]
+    assert reconstruct_cost_basis(trades, "BTC").avg_cost == pytest.approx(100.0)
