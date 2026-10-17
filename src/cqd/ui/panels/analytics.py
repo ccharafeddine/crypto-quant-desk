@@ -32,7 +32,7 @@ from cqd.data.sectors import sector_exposure, sector_of
 from cqd.engine.metrics import annualize_return, ratio_summary
 from cqd.engine.performance import (
     CASH_ASSETS,
-    build_equity_curve,
+    build_twr,
     drawdown_stats,
     monthly_return_table,
     realized_pnl_by_asset,
@@ -46,8 +46,8 @@ from cqd.ui.theme import get_theme, load_theme_name
 from cqd.ui.widgets import PanelHeader, PanelStatus
 
 _RATIO_FOOTNOTE = (
-    "Realized: daily returns of your account equity · "
-    "365-day annualization · EWMA vol λ=0.94 · "
+    "Realized: your account's time-weighted daily returns (deposits and "
+    "withdrawals excluded) · 365-day annualization · EWMA vol λ=0.94 · "
     "Sharpe/Sortino vs the risk-free rate in Settings > Data · Sortino = "
     "downside deviation below that rate · Calmar = ann. return / |max drawdown| "
     "(drawdown measured from the starting value) · VaR/CVaR historical at 95%."
@@ -414,7 +414,8 @@ class AnalyticsPanel(Panel):
         if not self._is_current(gen):
             return
 
-        equity = build_equity_curve(ledgers, closes)
+        # Time-weighted: deposits/withdrawals are flows, never returns.
+        _value, equity = build_twr(ledgers, closes)
         returns = equity.pct_change().dropna()
         self._render_ratios(ratio_summary(returns, rf_annual=get_risk_free_rate()))
         self._render_exposure(account_risk)

@@ -121,6 +121,119 @@ def build_equity_curve(
     return total
 
 
+# ---------- external flows + time-weighted returns ----------
+
+#: Ledger types that move value INTO or OUT OF the account rather than being
+#: earned by it. `transfer` covers Kraken's spot<->futures/staking moves and
+#: airdrops; treating them as flows (not returns) is the conservative choice:
+#: nothing that arrives from outside is ever booked as performance.
+EXTERNAL_FLOW_TYPES: frozenset[str] = frozenset({"deposit", "withdrawal", "transfer"})
+
+
+def _daily_prices(closes: dict[str, list[tuple[int, float]]], index: pd.DatetimeIndex):
+    out: dict[str, pd.Series] = {}
+    for symbol, pts in closes.items():
+        if not pts:
+            continue
+        idx = pd.to_datetime([t for t, _ in pts], unit="s").normalize()
+        s = pd.Series([c for _, c in pts], index=idx, dtype=float)
+        s = s[~s.index.duplicated(keep="last")]
+        out[symbol] = s.reindex(index.union(s.index)).ffill().bfill().reindex(index)
+    return out
+
+
+def external_flows(
+    ledgers: list[dict],
+    closes: dict[str, list[tuple[int, float]]],
+    index: pd.DatetimeIndex,
+    *,
+    cash_assets: frozenset[str] = CASH_ASSETS,
+) -> pd.DataFrame:
+    """Daily external cash flows in USD on `index`: columns `flow` and `weighted`.
+
+    `flow` is the signed USD value of deposits/withdrawals/transfers that day
+    (crypto valued at that day's close, cash at 1.0 - the same marks as
+    `build_equity_curve`). `weighted` is each flow times the fraction of its day
+    it was IN the account (a 06:00 UTC deposit counts 0.75), the Modified Dietz
+    day weight. Assets with no price series are skipped, exactly as the equity
+    curve excludes them, so flows and equity always cover the same holdings.
+    """
+    frame = pd.DataFrame({"flow": 0.0, "weighted": 0.0}, index=index)
+    if not ledgers or len(index) == 0:
+        return frame
+    prices = _daily_prices(closes, index)
+    for e in ledgers:
+        if str(e.get("type", "")).lower() not in EXTERNAL_FLOW_TYPES:
+            continue
+        asset = str(e["asset"])
+        amount = float(e.get("amount", 0.0) or 0.0)
+        ts = pd.to_datetime(float(e["time"]), unit="s")
+        day = ts.normalize()
+        if day not in frame.index:
+            continue
+        if asset in cash_assets:
+            px = 1.0
+        elif asset in prices:
+            px = float(prices[asset].loc[day])
+        else:
+            continue  # unpriced: excluded from equity too
+        usd = amount * px
+        in_account = 1.0 - (ts - day).total_seconds() / 86400.0
+        frame.loc[day, "flow"] += usd
+        frame.loc[day, "weighted"] += usd * in_account
+    return frame
+
+
+def flow_adjusted_returns(equity: pd.Series, flows: pd.DataFrame) -> pd.Series:
+    """Daily Modified Dietz returns: performance with deposits/withdrawals removed.
+
+        r_t = (V_t - V_{t-1} - F_t) / (V_{t-1} + W_t)
+
+    where F_t is the day's net external flow and W_t its time-weighted part.
+    A deposit-only account therefore returns exactly 0%, where the old
+    `equity.pct_change()` read a $10k -> $20k deposit as +100%. Days with no
+    capital at work (denominator <= 0, e.g. before the first deposit) return 0.
+    The first day has no prior value and is not returned.
+    """
+    if equity.empty or len(equity) < 2:
+        return pd.Series(dtype=float)
+    f = flows.reindex(equity.index).fillna(0.0)
+    prev = equity.shift(1)
+    denom = prev + f["weighted"]
+    num = equity - prev - f["flow"]
+    r = (num / denom).where(denom > _EPS, 0.0)
+    return r.iloc[1:].astype(float)
+
+
+def time_weighted_index(equity: pd.Series, flows: pd.DataFrame) -> pd.Series:
+    """Chain-linked TWR wealth index on the equity dates, starting at 1.0.
+
+    Feed THIS (not the raw equity curve) to `drawdown_stats`, `periodic_returns`
+    and `monthly_return_table`: a withdrawal is not a drawdown and a deposit is
+    not a gain. `index.pct_change()` reproduces `flow_adjusted_returns`.
+    """
+    if equity.empty:
+        return pd.Series(dtype=float)
+    r = flow_adjusted_returns(equity, flows)
+    wealth = pd.concat([pd.Series([1.0], index=equity.index[:1]), (1.0 + r).cumprod()])
+    wealth.attrs.update(equity.attrs)
+    return wealth
+
+
+def build_twr(
+    ledgers: list[dict],
+    closes: dict[str, list[tuple[int, float]]],
+    *,
+    cash_assets: frozenset[str] = CASH_ASSETS,
+) -> tuple[pd.Series, pd.Series]:
+    """(account value in USD, TWR wealth index) from ledgers + daily closes."""
+    equity = build_equity_curve(ledgers, closes, cash_assets=cash_assets)
+    if equity.empty:
+        return equity, pd.Series(dtype=float)
+    flows = external_flows(ledgers, closes, equity.index, cash_assets=cash_assets)
+    return equity, time_weighted_index(equity, flows)
+
+
 # ---------- realized round trips ----------
 
 
@@ -290,6 +403,11 @@ def periodic_returns(equity: pd.Series) -> dict[str, pd.Series]:
 
 __all__ = [
     "CASH_ASSETS",
+    "EXTERNAL_FLOW_TYPES",
+    "build_twr",
+    "external_flows",
+    "flow_adjusted_returns",
+    "time_weighted_index",
     "RoundTrip",
     "balances_over_time",
     "build_equity_curve",

@@ -26,7 +26,7 @@ from cqd.data.errors import KrakenAuthError, KrakenError
 from cqd.engine.cost_basis import cost_basis_by_quote
 from cqd.engine.performance import (
     CASH_ASSETS,
-    build_equity_curve,
+    build_twr,
     drawdown_stats,
     realized_trades,
     trade_stats,
@@ -151,13 +151,14 @@ class PerformancePanel(Panel):
         if not self._is_current(gen):
             return
 
-        equity = build_equity_curve(ledgers, closes)
-        dd = drawdown_stats(equity)
+        equity, twr = build_twr(ledgers, closes)
+        # Drawdown on the time-weighted index: a withdrawal is not a loss.
+        dd = drawdown_stats(twr)
         stats = trade_stats(realized_trades(trades))
         if dd["current_drawdown"] == dd["current_drawdown"]:  # not NaN
             self.drawdown_updated.emit(dd["current_drawdown"])
         self.demo_badge.setVisible(is_demo)
-        self._render_plots(equity)
+        self._render_plots(equity, twr)
         self._render_stats(dd, stats)
         self._render_positions(balances, trades, marks)
 
@@ -172,7 +173,7 @@ class PerformancePanel(Panel):
 
     # ---------- rendering ----------
 
-    def _render_plots(self, equity) -> None:
+    def _render_plots(self, equity, twr=None) -> None:
         theme = get_theme(load_theme_name())
         self.equity_plot.clear()
         self.dd_plot.clear()
@@ -182,8 +183,9 @@ class PerformancePanel(Panel):
         y = [float(v) for v in equity.values]
         self.equity_plot.plot(x, y, pen=pg.mkPen(theme.accent, width=2))
 
-        peak = equity.cummax()
-        dd = (equity / peak - 1.0) * 100.0
+        basis = twr if twr is not None and not twr.empty else equity
+        dd = (basis / basis.cummax() - 1.0) * 100.0
+        x = [ts.timestamp() for ts in basis.index]
         neg = QColor(theme.negative)
         neg.setAlpha(64)
         self.dd_plot.plot(
