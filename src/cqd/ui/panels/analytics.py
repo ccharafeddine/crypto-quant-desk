@@ -41,13 +41,16 @@ from cqd.engine.performance import (
 from cqd.engine.risk import correlation_matrix
 from cqd.engine.scenario import monte_carlo_nav, scenario_impacts
 from cqd.ui.panels.base import Panel
+from cqd.ui.settings_store import get_risk_free_rate
 from cqd.ui.theme import get_theme, load_theme_name
 from cqd.ui.widgets import PanelHeader, PanelStatus
 
 _RATIO_FOOTNOTE = (
-    "365-day annualization · simple returns from daily equity · EWMA vol λ=0.94 · "
-    "Sortino downside dev vs 0 · Calmar = ann. return / |max drawdown| · "
-    "VaR/CVaR historical at 95%."
+    "Realized: daily returns of your account equity · "
+    "365-day annualization · EWMA vol λ=0.94 · "
+    "Sharpe/Sortino vs the risk-free rate in Settings > Data · Sortino = "
+    "downside deviation below that rate · Calmar = ann. return / |max drawdown| "
+    "(drawdown measured from the starting value) · VaR/CVaR historical at 95%."
 )
 
 # key -> (label, is_percent). Percent metrics render as %; ratios as x.xx.
@@ -397,7 +400,7 @@ class AnalyticsPanel(Panel):
                     except KrakenError:
                         continue
                 try:
-                    account_risk = await compute_account_risk(c)
+                    account_risk = await compute_account_risk(c, rf_annual=get_risk_free_rate())
                 except EmptyPortfolioError:
                     account_risk = None
         except KrakenAuthError:
@@ -413,7 +416,7 @@ class AnalyticsPanel(Panel):
 
         equity = build_equity_curve(ledgers, closes)
         returns = equity.pct_change().dropna()
-        self._render_ratios(ratio_summary(returns))
+        self._render_ratios(ratio_summary(returns, rf_annual=get_risk_free_rate()))
         self._render_exposure(account_risk)
         self._render_attribution(trades, equity, returns, account_risk)
         self._render_scenario(equity, returns, account_risk)

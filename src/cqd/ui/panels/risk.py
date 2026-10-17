@@ -30,9 +30,11 @@ from cqd.ui.panels.base import Panel
 from cqd.ui.widgets import Badge, PanelHeader, PanelStatus
 
 _FOOTNOTE = (
-    "Annualized over 365 days · simple returns · beta vs BTC · "
-    "EWMA vol uses lambda 0.94 · USD and USD-pegged stables contribute zero "
-    "vol and beta; non-USD fiat floats like any other asset."
+    "Ex-ante risk: CURRENT weights over the last 90 closed daily bars (the "
+    "Analytics card instead shows your realized, time-weighted history, so the "
+    "two vols differ by design) · 365-day annualization · simple returns · "
+    "beta vs BTC · EWMA vol uses lambda 0.94 · USD and USD-pegged stables "
+    "contribute zero vol and beta; non-USD fiat floats like any other asset."
 )
 
 
@@ -179,11 +181,13 @@ class RiskPanel(Panel):
         gen = self._begin_load()
         self.status.setText("Loading...")
         try:
-            from cqd.ui.settings_store import get_dust_threshold_usd
+            from cqd.ui.settings_store import get_dust_threshold_usd, get_risk_free_rate
 
             client = make_client()
             async with client as c:
-                ar = await compute_account_risk(c, min_usd=get_dust_threshold_usd())
+                ar = await compute_account_risk(
+                    c, min_usd=get_dust_threshold_usd(), rf_annual=get_risk_free_rate()
+                )
                 is_demo = getattr(c, "is_demo", False)
             if not self._is_current(gen):
                 return  # a newer load owns the UI now

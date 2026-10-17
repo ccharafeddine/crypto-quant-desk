@@ -99,7 +99,9 @@ def compute_weights(
     return weights, info
 
 
-async def compute_account_risk(client: Any, *, days: int = 90, min_usd: float = 1.0) -> AccountRisk:
+async def compute_account_risk(
+    client: Any, *, days: int = 90, min_usd: float = 1.0, rf_annual: float = 0.0
+) -> AccountRisk:
     """Fetch the account, build weights + returns, and run the risk engine.
 
     Raises EmptyPortfolioError if nothing priceable above `min_usd` remains.
@@ -127,7 +129,7 @@ async def compute_account_risk(client: Any, *, days: int = 90, min_usd: float = 
     # Assets whose OHLC fetch failed were dropped from the frame; the engine
     # renormalizes weights over the remaining columns. Surface them as a caveat.
     info["returns_dropped"] = returns.attrs.get("dropped_assets", [])
-    risk = compute_portfolio_risk(weights, returns, btc_col="BTC")
+    risk = compute_portfolio_risk(weights, returns, btc_col="BTC", rf_annual=rf_annual)
 
     return AccountRisk(
         risk=risk,

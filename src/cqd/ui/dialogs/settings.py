@@ -256,8 +256,16 @@ class SettingsDialog(QDialog):
         self.dust.setPrefix("$")
         self.dust.setValue(store.get_dust_threshold_usd())
 
+        self.risk_free = QDoubleSpinBox()  # shown as a percent, stored as a fraction
+        self.risk_free.setRange(0.0, 25.0)
+        self.risk_free.setDecimals(2)
+        self.risk_free.setSuffix(" %")
+        self.risk_free.setValue(store.get_risk_free_rate() * 100.0)
+        self.risk_free.setToolTip("Annual risk-free rate for Sharpe and Sortino (e.g. 3M T-bill).")
+
         form.addRow("Data source", self.source_combo)
         form.addRow("Dust threshold", self.dust)
+        form.addRow("Risk-free rate", self.risk_free)
         return page
 
     # ---------- Strategy tab ----------
@@ -357,6 +365,7 @@ class SettingsDialog(QDialog):
         store.set_paper_mode(self.paper_checkbox.isChecked())
         store.set_max_order_usd(self.max_order.value())
         store.set_dust_threshold_usd(self.dust.value())
+        store.set_risk_free_rate(self.risk_free.value() / 100.0)
         store.set_data_source(self.source_combo.currentData())
         store.set_strategy_enabled(self.strategy_enabled.isChecked())
         store.set_strategy_variant(self.strategy_variant.currentData())

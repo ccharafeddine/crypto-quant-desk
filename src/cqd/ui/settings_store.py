@@ -75,6 +75,22 @@ def set_dust_threshold_usd(value: float) -> None:
     _qs().setValue("data/dust_threshold_usd", float(value))
 
 
+#: Default annual risk-free rate for Sharpe/Sortino: the US 3-month T-bill
+#: (FRED DTB3, 4.10% on 2026-10-15). A stale default is better than the old
+#: implicit 0%, and the user can update it in Settings > Data.
+DEFAULT_RISK_FREE_RATE = 0.041
+
+
+def get_risk_free_rate() -> float:
+    """Annual risk-free rate as a decimal (0.041 = 4.1%), clamped to [0, 0.25]."""
+    value = _as_float(_qs().value("data/risk_free_rate"), DEFAULT_RISK_FREE_RATE)
+    return min(max(value, 0.0), 0.25)
+
+
+def set_risk_free_rate(value: float) -> None:
+    _qs().setValue("data/risk_free_rate", float(value))
+
+
 def get_data_source() -> str:
     value = str(_qs().value("data/source") or "auto").strip().lower()
     return value if value in DATA_SOURCES else "auto"
