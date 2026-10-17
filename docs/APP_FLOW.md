@@ -13,6 +13,7 @@ Desktop Qt app: "screens" are adjustable card panels inside one workspace (Qt Ad
 | `risk_panel` | dock panel | `ui/panels/risk.py` | Vol, EWMA vol, BTC beta, HHI, effective bets, risk contribution, tail metrics + footnotes |
 | `chart_panel` | dock panel | `ui/panels/chart.py` | Candlestick + volume of the active symbol, cost-basis/break-even overlays, fill markers (pyqtgraph) |
 | `tape_panel` | dock panel | `ui/panels/tape.py` (new, E3) | Time & sales: streaming trades (price, size, side, time) for the active symbol |
+| `risk_lab_panel` | dock panel | `ui/panels/risk_lab.py` (Phase 3) | Risk page, tabbed with Analytics: VaR/ES set with rolling backtests (Kupiec, Christoffersen), crash replays + 30-day NAV fan, liquidity (days to exit at 10% of ADV, downside beta), attribution vs BTC + drawdown table + fee drag, FIFO/HIFO/average tax lots, MA parameter-stability heatmap |
 | `analytics_panel` | dock panel | `ui/panels/analytics.py` (new, E4) | Bloomberg-grade suite: ratios, correlation/exposure, attribution, scenario/stress |
 | `performance_panel` | dock panel | `ui/panels/performance.py` (new) | Equity curve, PnL history, drawdown, trade stats, per-position performance |
 | `ticket_panel` | dock panel | `ui/panels/ticket.py` (new) | Order entry: pair, side, type, qty, price(s), TP/SL, submit |
@@ -64,6 +65,7 @@ Menus: **File** (Settings, Disconnect account, Exit) · **View** (panel visibili
      - Accepted: txid shown, order appears via `executions` stream. Audit-logged.
      - Rejected (`EOrder:Insufficient funds`, `EOrder:Invalid price`, etc.): dialog shows Kraken's error verbatim + plain-English hint; nothing retried automatically. Audit-logged.
      - Timeout/ambiguous (sent, no response): warning state "Order status unknown — reconciling", app queries `OpenOrders`/`QueryOrders` until resolved. Audit-logged as `unknown→resolved:<state>`.
+   - **Send-time re-check** (both modes, tighten-only): just before sending, the order service re-reads the trading mode and the max-order cap. If the mode flipped since the confirm dialog, or the order (or its conditional close) now exceeds the current cap, the order is refused with an explanation and audit-logged as `reject`; it is never silently resized.
 6. Success state: toast "Order placed: BUY 0.05 BTC @ 60,000 (PAPER)"; ticket clears price fields, keeps pair.
 
 ### FL-5 Toggle paper/live
@@ -90,6 +92,17 @@ Menus: **File** (Settings, Disconnect account, Exit) · **View** (panel visibili
 3. Press → request built from engine outputs (never raw keys, never full trade history beyond what the question needs) → streamed response rendered; token cost shown after completion.
 4. No key → buttons hidden, hint "Add an Anthropic key in Settings to enable AI analysis."
 5. API error → inline error with retry; never blocks the rest of the app.
+
+### FL-8b Signals bookkeeping
+1. Each emitted setup is stored as pending in `signals-pending.json` beside the track-record log (atomic write), so a restart does not lose open signals; switching symbol reloads that symbol's pending setup; resolving a signal clears it.
+2. Resolved live outcomes are recorded **net** of costs (paper defaults: 40 bps fee, 5 bps slippage per side); the log keeps gross P&L and costs alongside.
+3. Setup size is capped at the free quote balance less a 0.5% buffer when the balance is known (`capped_by` = risk / leverage / balance); with a zero balance the setup fails closed. Unknown balance (demo before the first book) leaves the risk/leverage size.
+
+### FL-8c Risk lab
+1. Risk page → Risk lab tab (next to Analytics). Loads on first show, off the UI thread.
+2. Uses today's weights over each asset's full daily history (up to 720 closed Kraken bars), so the 250-day VaR backtest has room; the KPI strip's tail figure is historical ES 97.5% of the same ex-ante returns.
+3. Crash replays apply the real per-asset moves from four Kraken trade-history windows (LUNA 2022, FTX 2022, Aug 2024 carry unwind, 10 Oct 2025 cascade); assets without history in a window are proxied and labelled.
+4. Too little history → each tab shows its own "needs more history" state; never a crash.
 
 ### FL-9 Theme switch
 View > Theme > {Slate (default), Amber, Teal} → QSS rebuilt and applied live → choice persisted (QSettings). No data effects.

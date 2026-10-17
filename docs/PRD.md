@@ -47,6 +47,7 @@ The app runs natively on Windows with no WSL requirement for core function.
 - **AC4.3** Configurable **max order value** (USD, default 500): any ticket exceeding it is blocked with an explanatory error, in paper and live alike.
 - **AC4.4** **Audit log**: every order attempt and outcome appended as one JSON line to a local file (never in the repo), including mode, request, response/error, timestamps.
 - **AC4.5** The app never requests or uses withdrawal permission; no withdrawal code path exists.
+- **AC4.6** The cap and mode are **re-checked at send time**, not only at confirm: if the mode changed after the confirm dialog, or the order or its conditional close exceeds the cap as it stands at send, the order is refused and audit-logged. The re-check can only refuse, never resize or loosen.
 
 ### F5. Live streaming (WebSocket)
 - **AC5.1** Live mark prices for held assets and the selected pair stream via Kraken WebSocket v2; Positions and ticket update without polling.
@@ -118,6 +119,21 @@ Order-book imbalance is used for **execution/timing, never direction** (a noisy,
 - **AC14.1** From a depth snapshot the panel shows mid, microprice, spread (bps), multi-depth imbalance, estimated fill VWAP/slippage for the setup size, and a wall map.
 - **AC14.2** A timing verdict (`GO`/`WAIT`/`CAUTION` + reasons) gates *when* to act on a setup, never the direction; it is **conservative by default** (unknown/thin/one-sided book → `WAIT`, never `GO`).
 - **AC14.3** A "setup armed/active" alert kind notifies the owner without watching; the analyst can narrate the setup + execution context over engine-computed numbers only.
+
+- **AC13.6** Setup size is also capped at the free quote balance (less a 0.5% buffer) when known, and the setup reports which cap bound it (risk, leverage or balance).
+- **AC13.7** Live signal P&L is recorded net of fees and slippage (gross and costs kept alongside), and pending signals persist across restarts.
+
+## Risk lab (Phase 3 — DELIVERED)
+
+### F15. Risk lab
+A tabbed panel on the Risk page; every number is engine-computed (pure, tested) from Kraken data only.
+- **AC15.1 VaR set**: one-day VaR 95/99% by historical, filtered historical (EWMA λ 0.94), parametric normal and Cornish-Fisher; ES 97.5% (historical, filtered, normal) in % and dollars.
+- **AC15.2 VaR backtesting**: rolling 250-day window, one step ahead at 99%, with exception count vs expected, Kupiec POF and Christoffersen independence p-values and a pass/fail verdict per method.
+- **AC15.3 Crash replays**: today's book through four real Kraken trade-history windows (LUNA, FTX, Aug 2024, 10 Oct 2025) plus a stablecoin depeg shock and a 30-day block-bootstrap NAV fan; proxied assets are labelled.
+- **AC15.4 Liquidity**: value vs 30-day ADV, days to exit at 10% participation, beta, downside beta, rolling correlation to BTC.
+- **AC15.5 Attribution**: active return vs BTC split exactly into allocation, BTC beta and selection; deepest drawdowns with time to trough and recovery; fee drag as % of average equity per year.
+- **AC15.6 Tax lots**: average cost, FIFO and HIFO side by side for USD-quoted trades; realized + unrealized is identical across methods (tested invariant). Arithmetic, not tax advice.
+- **AC15.7 Parameter stability**: walk-forward expectancy over a fast×slow MA grid with the chosen cell outlined and the share of positive cells, so a lone bright cell reads as curve fit.
 
 ## User stories
 

@@ -192,6 +192,13 @@ positive. That is the trap this design avoids.
 - **S5.3** Alerts: new rule type "setup armed/triggered for pair" via the existing
   alerts engine + winotify sink, so the user is notified without watching.
 
+## S6 — Hardening leftovers (Phase 3) — ✅ DONE
+- **S6.1** Pending signals persist: `TrackRecordLog.load_pending/save_pending` keep open setups in a `signals-pending.json` sidecar (atomic write); the service reloads them on symbol change and clears them on resolve.
+- **S6.2** Size cap at free balance: `evaluate_setup(..., free_quote=)` caps the notional at the free quote balance less `BALANCE_COST_BUFFER` (0.5%); `TradeSetup.capped_by` names the binding cap; a zero balance fails closed; unknown balance (None) leaves the risk/leverage size.
+- **S6.3** Live-signal P&L is net: `resolve_record(..., fee_bps, slippage_bps)` (paper defaults 40/5 per side) stores net `pnl_quote` plus `gross_pnl_quote` and `costs_quote`, so live expectancy is comparable with the cost-aware backtest.
+- **S6.4** Order cap re-checked at send (money path, tighten-only): `OrderService.submit` re-reads mode and cap and refuses an order whose mode changed since prepare or whose value / conditional close exceeds the current cap. Audited as `reject`. No signal→order path is added; the three §0 lines still hold.
+- **S6.5** Parameter stability: `parameter_stability` runs `walk_forward` over a fast×slow grid, shown as a heatmap in the Risk lab.
+
 ---
 
 ## Test plan (per step, house style)
