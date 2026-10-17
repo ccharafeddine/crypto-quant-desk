@@ -35,6 +35,7 @@ from __future__ import annotations
 import math
 from typing import Literal
 
+import numpy as np
 import pandas as pd
 from pydantic import BaseModel, Field
 
@@ -115,6 +116,34 @@ class StrategyStats(BaseModel):
     oos_expectancy_r: float | None = None
     oos_return: float | None = None
     oos_folds: int | None = None
+    #: Close-marked equity after each evaluated bar (open trade included), with
+    #: the bar open times; ends early on a PASS/bust like the replay itself.
+    equity_curve: list[float] = Field(default_factory=list)
+    curve_times: list[int] = Field(default_factory=list)
+    #: 90% bootstrap interval for `expectancy_r` (None under 2 trades).
+    expectancy_r_ci: tuple[float, float] | None = None
+    #: The same replay with zero fees and slippage, set by the caller so the
+    #: panel can show what costs take out (None when not computed).
+    frictionless_curve: list[float] | None = None
+    frictionless_expectancy_r: float | None = None
+
+
+def bootstrap_mean_ci(
+    values: list[float], *, level: float = 0.90, n_boot: int = 2000, seed: int = 7
+) -> tuple[float, float] | None:
+    """Percentile bootstrap interval for the mean of `values` (trade resampling).
+
+    Deterministic (fixed seed) so the panel does not flicker between refreshes.
+    `None` with fewer than two values - one trade has no spread to resample.
+    """
+    if len(values) < 2:
+        return None
+    rng = np.random.default_rng(seed)
+    arr = np.asarray(values, dtype=float)
+    means = rng.choice(arr, size=(n_boot, arr.size), replace=True).mean(axis=1)
+    tail = (1.0 - level) / 2.0
+    lo, hi = np.quantile(means, [tail, 1.0 - tail])
+    return float(lo), float(hi)
 
 
 def classify_exit(
@@ -238,6 +267,8 @@ def replay(
     peak = equity
     max_dd = 0.0
     prev_mark = equity
+    curve: list[float] = []
+    times: list[int] = []
     outcome: Literal["pass", "bust", "unresolved"] = "unresolved"
     multiple = _target_multiple(target_index)
 
@@ -296,6 +327,8 @@ def replay(
             equity = worst
             max_dd = min(max_dd, equity / peak - 1.0)
             position = None
+            curve.append(equity)
+            times.append(int(bar.time))
             break
 
         # 4. Close mark: drawdown (incl. open trade) and PASS on the close.
@@ -305,6 +338,8 @@ def replay(
         peak = max(peak, mark)
         max_dd = min(max_dd, mark / peak - 1.0)
         prev_mark = mark
+        curve.append(mark)
+        times.append(int(bar.time))
         if mark >= pass_at:
             outcome = "pass"
             if position is not None:
@@ -347,6 +382,9 @@ def replay(
         buy_hold_return=bh,
         fee_bps=limits.fee_bps,
         slippage_bps=limits.slippage_bps,
+        equity_curve=curve,
+        curve_times=times,
+        expectancy_r_ci=bootstrap_mean_ci(rs),
         **stats,
     )
 
@@ -526,6 +564,7 @@ __all__ = [
     "PAPER_SLIPPAGE_BPS",
     "PAPER_TAKER_FEE_BPS",
     "PropLimits",
+    "bootstrap_mean_ci",
     "StrategyStats",
     "WalkForwardFold",
     "WalkForwardResult",

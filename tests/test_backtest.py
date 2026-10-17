@@ -290,3 +290,21 @@ def test_walk_forward_out_of_sample_only_uses_past_bars() -> None:
 def test_walk_forward_too_short_is_empty() -> None:
     res = real_walk_forward(_gbm(100, 1), StrategyParams(), PropLimits(starting_equity=1.0))
     assert res.folds == [] and res.oos_expectancy_r is None
+
+
+def test_replay_exposes_a_close_marked_curve_and_ci() -> None:
+    from cqd.engine.backtest import bootstrap_mean_ci
+
+    params = StrategyParams(fast=10, slow=20, trend=50)
+    c = _gbm(400, 5)
+    st = replay(c, params, PropLimits(starting_equity=1e4, **RESEARCH))
+    assert len(st.equity_curve) == len(st.curve_times) == st.bars
+    assert st.curve_times == [int(b.time) for b in c]
+    assert st.equity_curve[-1] == pytest.approx(st.final_equity)
+    if st.trades >= 2:
+        lo, hi = st.expectancy_r_ci
+        assert lo <= st.expectancy_r <= hi
+    assert bootstrap_mean_ci([1.0]) is None
+    assert bootstrap_mean_ci([1.0, 1.0]) == (1.0, 1.0)
+    # Deterministic: same input, same interval.
+    assert bootstrap_mean_ci([0.5, -1.0, 2.0]) == bootstrap_mean_ci([0.5, -1.0, 2.0])

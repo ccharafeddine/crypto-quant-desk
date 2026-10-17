@@ -334,9 +334,14 @@ class SignalsService(QObject):
             # The costed replay of the configured strategy, then the honest read:
             # an anchored walk-forward whose out-of-sample numbers ride along.
             stats = replay(window, params, limits)
+            free = replay(
+                window, params, limits.model_copy(update={"fee_bps": 0.0, "slippage_bps": 0.0})
+            )
             wf = walk_forward(window, params, limits)
             return stats.model_copy(
                 update={
+                    "frictionless_curve": free.equity_curve,
+                    "frictionless_expectancy_r": free.expectancy_r,
                     "oos_trades": wf.oos_trades,
                     "oos_expectancy_r": wf.oos_expectancy_r,
                     "oos_return": wf.oos_return,
