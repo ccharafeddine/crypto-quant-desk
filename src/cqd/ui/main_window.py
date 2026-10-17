@@ -1,4 +1,4 @@
-"""Main window with dockable panels (Kraken-Desktop-style layout)."""
+"""Main window: the Graphite shell (header, left nav, KPI strip) around paged cards."""
 
 from __future__ import annotations
 
@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QStatusBar,
     QToolBar,
+    QVBoxLayout,
     QWidget,
 )
 
@@ -52,8 +53,12 @@ from cqd.ui.theme import (
     load_theme_name,
     save_theme_name,
 )
-from cqd.ui.widgets import Badge
-from cqd.ui.workspace import PRESET_NAMES, Workspace
+from cqd.ui.assets import mark_pixmap
+from cqd.ui.format import display_pair
+from cqd.ui.kpis import KpiHub
+from cqd.ui.panels.overview import OverviewPanel, trailing_return
+from cqd.ui.shell import HeaderStrip, KpiStrip, NavRail, PageTitle
+from cqd.ui.workspace import DEFAULT_PERSPECTIVE, PAGE_KEY, PRESET_NAMES, Workspace
 
 
 _TIMEFRAME_LABELS = {60: "1H", 240: "4H", 1440: "1D", 10080: "1W"}
@@ -77,35 +82,32 @@ class MainWindow(QMainWindow):
         self._theme_name = load_theme_name()
         self._apply_theme(self._theme_name)
 
+        self.kpi_hub = KpiHub(self)
         self._build_header()
         self._build_panels()
         self._build_menus()
         self._build_status_bar()
         self._build_stream()
         self._build_signals()
+        self._wire_kpis()
+        self._show_page(str(self._settings.value(PAGE_KEY, DEFAULT_PERSPECTIVE)))
 
     def _build_header(self) -> None:
-        """Slim in-window header bar above the docks (identity + mode badge)."""
+        """The header strip: brand, account context, NAV/day, chips, stream."""
         bar = QToolBar("Header", self)
         bar.setObjectName("appHeaderBar")
         bar.setMovable(False)
         bar.setFloatable(False)
         bar.setContextMenuPolicy(Qt.ContextMenuPolicy.PreventContextMenu)
-
-        container = QWidget()
-        lay = QHBoxLayout(container)
-        lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(10)
-        app_title = QLabel("Crypto Quant Desk")
-        app_title.setProperty("role", "app-title")
-        lay.addWidget(app_title)
-        self._mode_badge = Badge("DEMO" if self._is_demo else "LIVE")
-        lay.addWidget(self._mode_badge)
-        lay.addStretch(1)
-        bar.addWidget(container)
+        self.header = HeaderStrip(mark_pixmap(22))
+        self.header.new_order.connect(lambda: self._show_page("Trading", "ticket"))
+        self.header.refresh.connect(self._refresh_all)
+        self.header.set_context(is_demo=self._is_demo, mode=services.trading_mode())
+        bar.addWidget(self.header)
         self.addToolBar(Qt.ToolBarArea.TopToolBarArea, bar)
 
     def _build_panels(self) -> None:
+        self.overview_panel = OverviewPanel(self)
         self.watchlist_panel = WatchlistPanel(self)
         self.positions_panel = PositionsPanel(self)
         self.risk_panel = RiskPanel(self)
@@ -120,23 +122,47 @@ class MainWindow(QMainWindow):
         self.analytics_panel = AnalyticsPanel(self)
         self.signals_panel = SignalsPanel(self)
 
-        # Adjustable card workspace (QtAds): register every panel under a stable
-        # key, build the shipped perspectives, then restore last session's
-        # arrangement (falling back to the default if none/corrupt).
-        self.workspace = Workspace(self)
+        # The shell: nav rail | (page title, KPI strip, QtAds cards).
+        central = QWidget(self)
+        outer = QHBoxLayout(central)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+        self.nav = NavRail(central)
+        self.nav.navigate.connect(self._show_page)
+        outer.addWidget(self.nav)
+        page = QWidget(central)
+        page_lay = QVBoxLayout(page)
+        page_lay.setContentsMargins(14, 10, 14, 8)
+        page_lay.setSpacing(10)
+        self.page_title = PageTitle(page)
+        page_lay.addWidget(self.page_title)
+        self.kpi_strip = KpiStrip(page)
+        page_lay.addWidget(self.kpi_strip)
+        dock_host = QWidget(page)
+        host_lay = QVBoxLayout(dock_host)
+        host_lay.setContentsMargins(0, 0, 0, 0)
+        page_lay.addWidget(dock_host, 1)
+        outer.addWidget(page, 1)
+        self.setCentralWidget(central)
+
+        # Paged card workspace (QtAds): register every panel under a stable key,
+        # build the shipped pages, then restore last session's arrangement.
+        self.workspace = Workspace(dock_host)
+        host_lay.addWidget(self.workspace.manager)
+        self.workspace.add_panel("overview", "Overview", self.overview_panel)
         self.workspace.add_panel("watchlist", "Watchlist", self.watchlist_panel)
         self.workspace.add_panel("positions", "Positions", self.positions_panel)
         self.workspace.add_panel("risk", "Risk", self.risk_panel)
         self.workspace.add_panel("performance", "Performance", self.performance_panel)
         self.workspace.add_panel("chart", "Chart", self.chart_panel)
-        self.workspace.add_panel("book", "Depth", self.book_panel)
+        self.workspace.add_panel("book", "Order book", self.book_panel)
         self.workspace.add_panel("tape", "Time & Sales", self.tape_panel)
-        self.workspace.add_panel("ticket", "Ticket", self.ticket_panel)
-        self.workspace.add_panel("orders", "Orders", self.orders_panel)
+        self.workspace.add_panel("ticket", "Order ticket", self.ticket_panel)
+        self.workspace.add_panel("orders", "Open orders", self.orders_panel)
         self.workspace.add_panel("alerts", "Alerts", self.alerts_panel)
         self.workspace.add_panel("analyst", "Analyst", self.analyst_panel)
         self.workspace.add_panel("analytics", "Analytics", self.analytics_panel)
-        self.workspace.add_panel("signals", "Signals", self.signals_panel)
+        self.workspace.add_panel("signals", "Signals & backtest", self.signals_panel)
         self.workspace.ensure_presets(self._settings)
         self.workspace.restore_state(self._settings)
         # Theme the QtAds chrome now that the manager exists (the __init__
@@ -151,6 +177,7 @@ class MainWindow(QMainWindow):
         self.book_panel.price_clicked.connect(self.ticket_panel.set_price)
         # A signal setup only ever PRE-FILLS the ticket (never submits).
         self.signals_panel.send_to_ticket.connect(self.ticket_panel.prefill_setup)
+        self.signals_panel.open_settings.connect(self._open_settings)
 
         # Active-symbol bus: the watchlist and the ticket are the two selection
         # sources; the hub normalizes and fans one change out to every panel
@@ -161,8 +188,56 @@ class MainWindow(QMainWindow):
         self.ticket_panel.pair_selected.connect(self.symbol_hub.set)
         self.symbol_hub.changed.connect(self._on_symbol)
 
+    # ---------- pages + KPI strip ----------
+
+    def _show_page(self, page: str, focus: str | None = None) -> None:
+        """Open a workspace page from the nav (or the header's New order)."""
+        if page not in PRESET_NAMES:
+            page = DEFAULT_PERSPECTIVE
+        self.workspace.show_page(page, focus)
+        self.nav.select(page, focus)
+        self.page_title.set_page(
+            page, "Kraken spot · demo book" if self._is_demo else "Kraken spot"
+        )
+
+    def _wire_kpis(self) -> None:
+        """Positions, Performance and Risk publish; the header + strip render."""
+        hub = self.kpi_hub
+        hub.changed.connect(self.kpi_strip.set_state)
+        hub.changed.connect(self.header.set_state)
+        hub.update(is_demo=self._is_demo)
+        self.positions_panel.book_updated.connect(lambda d: hub.update(**d))
+        self.performance_panel.performance_updated.connect(self._on_performance)
+        self.risk_panel.risk_updated.connect(self._on_risk)
+
+    def _on_performance(self, payload: dict) -> None:
+        self.overview_panel.on_performance(payload)
+        self.kpi_hub.update(
+            realized=payload.get("realized"),
+            fees=payload.get("fees"),
+            max_drawdown=payload.get("max_drawdown"),
+            underwater_days=payload.get("underwater_days"),
+            last_close_value=payload.get("last_close_value"),
+            twr_1y=trailing_return(payload.get("twr")) if payload.get("twr") is not None else None,
+            btc_1y=trailing_return(payload.get("btc")) if payload.get("btc") is not None else None,
+        )
+
+    def _on_risk(self, ar) -> None:
+        self.overview_panel.on_risk(ar)
+        r = ar.risk
+        tail = r.tail or {}
+        self.kpi_hub.update(
+            ann_vol=r.ann_vol,
+            ewma_vol=r.ewma_vol,
+            btc_beta=r.book_beta_btc,
+            var95=tail.get("VaR_95"),
+            es=tail.get("CVaR_95"),
+            es_level="95%",
+        )
+
     def _on_symbol(self, symbol) -> None:
         """Fan one active-symbol change out to every consumer in its own form."""
+        self.header.set_symbol(display_pair(symbol.ws))
         self.chart_panel.set_pair(symbol.rest)
         self.book_panel.set_pair(symbol.rest)
         self.tape_panel.set_symbol(symbol.ws)
@@ -217,6 +292,12 @@ class MainWindow(QMainWindow):
         self._persp_menu: QMenu = view_menu.addMenu("Perspectives")
         self._rebuild_perspectives_menu()
         self.workspace.manager.perspectiveListChanged.connect(self._rebuild_perspectives_menu)
+
+        pages_menu: QMenu = view_menu.addMenu("Pages")
+        for name in PRESET_NAMES:
+            action = QAction(name, self)
+            action.triggered.connect(lambda _c=False, n=name: self._show_page(n))
+            pages_menu.addAction(action)
 
         reset_action = QAction("Reset layout", self)
         reset_action.triggered.connect(self._on_reset_layout)
@@ -285,6 +366,7 @@ class MainWindow(QMainWindow):
         )
         if confirm == QMessageBox.StandardButton.Yes:
             self.workspace.reset()
+            self._show_page(DEFAULT_PERSPECTIVE)
 
     def _build_theme_menu(self, view_menu: QMenu) -> None:
         theme_menu: QMenu = view_menu.addMenu("Theme")
@@ -316,7 +398,14 @@ class MainWindow(QMainWindow):
     def _build_status_bar(self) -> None:
         bar = QStatusBar(self)
         self.setStatusBar(bar)
-        # Permanent right-side widgets: stream health + last-tick clock.
+        # Permanent right-side widgets: conventions, last-tick clock, stream.
+        conventions = QLabel(
+            "Daily bars close 00:00 UTC; the forming bar is excluded from statistics · "
+            f"365-day annualisation · simple returns · rf {store.get_risk_free_rate() * 100:.1f}%"
+        )
+        conventions.setProperty("role", "footnote")
+        self._conventions = conventions
+        bar.addPermanentWidget(conventions)
         self._tick_clock = QLabel("")
         self._tick_clock.setProperty("role", "footnote")
         bar.addPermanentWidget(self._tick_clock)
@@ -417,6 +506,7 @@ class MainWindow(QMainWindow):
             self.signals_service.stop()
 
     def _on_stream_state(self, state: str) -> None:
+        self.header.set_stream(state)
         self._stream_label.setText(f"STREAM: {state.upper()}")
         self._stream_label.setProperty("streamState", state)
         style = self._stream_label.style()
@@ -437,12 +527,18 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event) -> None:  # noqa: N802 - Qt naming
         # Persist the current arrangement (and any saved perspectives) so the
-        # next launch reopens exactly as the user left it.
+        # next launch reopens exactly as the user left it, on the same page.
+        if self.workspace.current_page:
+            self.workspace.manager.addPerspective(self.workspace.current_page)
+            self._settings.setValue(PAGE_KEY, self.workspace.current_page)
         self.workspace.save_state(self._settings)
         self.stream.stop()
         super().closeEvent(event)
 
     def _update_status_message(self) -> None:
+        header = getattr(self, "header", None)
+        if header is not None:
+            header.set_context(is_demo=self._is_demo, mode=services.trading_mode())
         mode = services.trading_mode().upper()
         if self._is_demo:
             self.statusBar().showMessage(
@@ -491,7 +587,6 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(
             "Crypto Quant Desk (Demo data)" if self._is_demo else "Crypto Quant Desk"
         )
-        self._mode_badge.setText("DEMO" if self._is_demo else "LIVE")
         self.paper_action.setChecked(store.get_paper_mode())
         self.ticket_panel.refresh_mode_badge()
         self._update_status_message()
@@ -517,6 +612,7 @@ class MainWindow(QMainWindow):
 
     def _refresh_all(self) -> None:
         panels = (
+            self.overview_panel,
             self.watchlist_panel,
             self.positions_panel,
             self.risk_panel,

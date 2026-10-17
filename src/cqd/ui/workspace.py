@@ -1,19 +1,19 @@
-"""Adjustable card-panel workspace (Qt Advanced Docking System).
+"""Paged card workspace (Qt Advanced Docking System) behind the left nav.
 
-Replaces the old fixed-region QDockWidget cockpit. Every panel becomes a
-``CDockWidget`` the user can float, tab, split, and freely resize; the whole
-arrangement saves/restores to QSettings, and three named perspectives
-(Trading / Analysis / Monitor) ship as presets alongside any the user saves.
-
-The placement *specs* below are pure data and are validated without Qt
-(`validate_layout`); the `Workspace` class is the thin Qt-facing wrapper.
+Every panel is a ``CDockWidget`` the user can float, tab, split and resize.
+The Graphite redesign groups them into six PAGES (Portfolio, Markets,
+Trading, Signals, Risk, Insight) chosen from the left nav: a page opens only
+its own cards, so the old 13-tab soup becomes a handful of readable cards per
+page. Each page is a QtAds perspective; the user's rearrangement of a page is
+remembered when they switch away, and "Reset layout" rebuilds the shipped
+pages. Placement specs are pure data validated without Qt (`validate_layout`).
 """
 
 from __future__ import annotations
 
 from PySide6.QtCore import QByteArray, QSettings
 from PySide6.QtGui import QAction
-from PySide6.QtWidgets import QMainWindow, QWidget
+from PySide6.QtWidgets import QWidget
 
 import PySide6QtAds as qtads
 from PySide6QtAds import CDockManager, CDockWidget
@@ -30,9 +30,10 @@ _T = qtads.TopDockWidgetArea
 
 _VALID_AREAS = frozenset({_C, _L, _R, _B, _T})
 
-# The nine panels of the current app. Keys are the CDockWidget objectNames
-# (stable ids the QtAds save/restore keys off); titles are the tab labels.
+# Every panel in the app. Keys are the CDockWidget objectNames (stable ids the
+# QtAds save/restore keys off).
 PANEL_KEYS: tuple[str, ...] = (
+    "overview",
     "watchlist",
     "positions",
     "risk",
@@ -48,80 +49,73 @@ PANEL_KEYS: tuple[str, ...] = (
     "signals",
 )
 
-DEFAULT_PERSPECTIVE = "Trading"
-PRESET_NAMES: tuple[str, ...] = ("Trading", "Analysis", "Monitor")
+DEFAULT_PERSPECTIVE = "Portfolio"
+PRESET_NAMES: tuple[str, ...] = ("Portfolio", "Markets", "Trading", "Signals", "Risk", "Insight")
 
 # QSettings keys for the last-session layout blob and its schema token.
 STATE_KEY = "workspace/state"
 VERSION_KEY = "workspace/panelset"
-# Token that changes whenever the panel set changes, so saved perspectives/state
-# from an older panel set are discarded (else a new panel never gets placed).
-LAYOUT_VERSION = "|".join(PANEL_KEYS)
+PAGE_KEY = "workspace/page"
+# Changes whenever the panel set or the page model changes, so layouts saved by
+# an older version are discarded (else a new panel never gets placed).
+LAYOUT_VERSION = "pages-1|" + "|".join(PANEL_KEYS)
 
-# Each preset places all nine panels exactly once; every non-first target is a
-# key placed earlier in the same list (enforced by validate_layout + tests).
+# Each page places ITS panels; the first has no target, every later target is
+# a key placed earlier on the same page (enforced by validate_layout + tests).
 LAYOUTS: dict[str, list[tuple[str, object, str | None]]] = {
-    # Trading: chart-centric. Watchlist far left, holdings/risk/perf next,
-    # chart center, order entry + depth right, orders/alerts/analyst bottom.
+    # Overview (equity vs BTC, risk at a glance, positions) with the detail
+    # cards one tab away.
+    "Portfolio": [
+        ("overview", _C, None),
+        ("positions", _C, "overview"),
+        ("performance", _C, "overview"),
+    ],
+    # Markets: chart centre, watchlist left, depth + tape right.
+    "Markets": [
+        ("chart", _C, None),
+        ("watchlist", _L, "chart"),
+        ("book", _R, "chart"),
+        ("tape", _B, "book"),
+    ],
+    # Trading: chart + order entry, depth beside the ticket, orders below.
     "Trading": [
         ("chart", _C, None),
-        ("positions", _L, "chart"),
-        ("watchlist", _L, "positions"),
-        ("risk", _C, "positions"),
-        ("performance", _C, "positions"),
         ("ticket", _R, "chart"),
         ("book", _C, "ticket"),
-        ("tape", _C, "book"),
         ("orders", _B, "chart"),
-        ("alerts", _C, "orders"),
-        ("analyst", _C, "orders"),
-        ("analytics", _C, "performance"),
-        ("signals", _C, "ticket"),
     ],
-    # Analysis: performance + risk are the headline; chart drops to a strip,
-    # order-entry tucks to the side, watchlist tabs with holdings.
-    "Analysis": [
-        ("performance", _C, None),
-        ("risk", _C, "performance"),
-        ("positions", _L, "performance"),
-        ("watchlist", _C, "positions"),
-        ("book", _C, "positions"),
-        ("tape", _C, "book"),
-        ("analyst", _R, "performance"),
-        ("ticket", _C, "analyst"),
-        ("chart", _B, "performance"),
-        ("orders", _C, "chart"),
-        ("alerts", _C, "chart"),
-        ("analytics", _C, "performance"),
-        ("signals", _C, "analyst"),
+    # Signals & backtest gets the room it needs, with the chart for context.
+    "Signals": [
+        ("signals", _C, None),
+        ("chart", _R, "signals"),
     ],
-    # Monitor: passive watching. Watchlist + holdings + orders + alerts
-    # dominate; a chart and depth ride the right, entry panels tab away.
-    "Monitor": [
-        ("watchlist", _C, None),
-        ("positions", _R, "watchlist"),
-        ("orders", _B, "positions"),
-        ("alerts", _C, "orders"),
-        ("chart", _R, "positions"),
-        ("book", _C, "chart"),
-        ("tape", _C, "chart"),
-        ("risk", _R, "orders"),
-        ("performance", _C, "positions"),
-        ("ticket", _C, "chart"),
-        ("analyst", _C, "orders"),
-        ("analytics", _C, "performance"),
-        ("signals", _C, "ticket"),
+    "Risk": [
+        ("risk", _C, None),
+        ("analytics", _R, "risk"),
+        ("alerts", _B, "risk"),
     ],
+    "Insight": [
+        ("analyst", _C, None),
+        ("analytics", _R, "analyst"),
+    ],
+}
+
+# Pages whose default split should not be even: page -> (area key, ratio).
+# The signals card carries its own two-column backtest, so it gets the room.
+SPLITS: dict[str, tuple[str, tuple[int, ...]]] = {
+    "Signals": ("signals", (62, 38)),
 }
 
 
 def validate_layout(placements: list[tuple[str, object, str | None]]) -> None:
-    """Raise ValueError if a placement list is malformed.
+    """Raise ValueError if one page's placement list is malformed.
 
-    Guarantees every panel is placed exactly once, the first placement has no
+    Every key is known and placed at most once, the first placement has no
     target, every later target was placed before it, and every area is valid.
     Pure (no Qt objects touched beyond the area sentinels).
     """
+    if not placements:
+        raise ValueError("a page must place at least one panel")
     seen: set[str] = set()
     for i, (key, area, target) in enumerate(placements):
         if key not in PANEL_KEYS:
@@ -139,15 +133,28 @@ def validate_layout(placements: list[tuple[str, object, str | None]]) -> None:
             if target not in seen:
                 raise ValueError(f"{key!r} targets {target!r} before it is placed")
         seen.add(key)
-    missing = set(PANEL_KEYS) - seen
+
+
+def validate_pages(layouts: dict[str, list[tuple[str, object, str | None]]]) -> None:
+    """Every page is valid and every panel is reachable from some page."""
+    placed: set[str] = set()
+    for placements in layouts.values():
+        validate_layout(placements)
+        placed |= {key for key, _a, _t in placements}
+    missing = set(PANEL_KEYS) - placed
     if missing:
-        raise ValueError(f"layout omits panels: {sorted(missing)}")
+        raise ValueError(f"no page shows: {sorted(missing)}")
+
+
+def page_panels(name: str) -> list[str]:
+    """The panel keys a page opens, in placement order."""
+    return [key for key, _a, _t in LAYOUTS[name]]
 
 
 class Workspace:
     """Owns the QtAds dock manager and the app's dock widgets."""
 
-    def __init__(self, host: QMainWindow) -> None:
+    def __init__(self, host: QWidget) -> None:
         # Live splitter resize and even splits on insertion. NOTE: we do NOT
         # enable FocusHighlighting - it installs an app-global CDockFocusController
         # event filter per manager, and stale filters over torn-down managers
@@ -159,14 +166,19 @@ class Workspace:
         # Keep a strong reference to the host: the manager is a C++ child of it,
         # so if the host were collected the manager would be deleted under us.
         self._host = host
-        # Constructing with the main window as parent installs the manager as
-        # its central widget.
+        # With a QMainWindow parent the manager installs itself as the central
+        # widget; with a plain QWidget it is a child the caller lays out (the
+        # app puts it beside the left nav).
         self.manager = CDockManager(host)
         # QtAds ships a default stylesheet on the manager (palette()-based, and
         # it defines the title-bar button icons). Keep it as the base layer so
         # the icons survive; theme QSS is appended on top of it (see apply_theme).
         self._ads_default_qss = self.manager.styleSheet()
         self._docks: dict[str, CDockWidget] = {}
+        self.current_page: str | None = None
+        # Shipped pages built (offscreen) this session whose default split has
+        # not yet been applied on a real, laid-out show.
+        self._split_pending: set[str] = set()
 
     # ---- registration ----
 
@@ -182,8 +194,10 @@ class Workspace:
     # ---- arrangement ----
 
     def apply_layout(self, name: str) -> None:
-        """Rebuild the arrangement to a named preset (detaches all first, then
-        re-adds per the spec). Panel widgets survive the rebuild."""
+        """Rebuild the arrangement to a shipped page (detaches all first, then
+        re-adds per the spec). The page's panels are open; every other panel
+        stays registered but closed, so the View menu and saved state still
+        know it. Panel widgets survive the rebuild."""
         placements = LAYOUTS[name]
         for dock in list(self.manager.dockWidgetsMap().values()):
             self.manager.removeDockWidget(dock)
@@ -194,8 +208,63 @@ class Workspace:
                 areas[key] = self.manager.addDockWidget(area, dock)
             else:
                 areas[key] = self.manager.addDockWidget(area, dock, areas[target])
+        first = placements[0][0]
+        for key, dock in self._docks.items():
+            if key in areas:
+                continue
+            self.manager.addDockWidget(_C, dock, areas[first])
+            dock.toggleView(False)
+        # The first card of the page is the visible tab.
+        self._docks[first].setAsCurrentTab()
+        if name in SPLITS:
+            self._split_pending.add(name)
+        self.current_page = name
+
+    def open_panels(self) -> set[str]:
+        """Keys of the panels currently open (not closed) in the workspace."""
+        return {k for k, d in self._docks.items() if not d.isClosed()}
+
+    def show_page(self, name: str, focus: str | None = None) -> None:
+        """Switch to a page, remembering the user's arrangement of the page we
+        leave, then bring `focus` (a panel key on that page) to the front."""
+        if self.current_page and self.current_page != name:
+            self.manager.addPerspective(self.current_page)
+        if name in self.perspective_names():
+            self.manager.openPerspective(name)
+        else:
+            self.apply_layout(name)
+        self.current_page = name
+        self._apply_split(name)
+        if focus is not None and focus in self._docks:
+            dock = self._docks[focus]
+            if dock.isClosed():
+                dock.toggleView(True)
+            dock.setAsCurrentTab()
+            dock.raise_()
+
+    def _apply_split(self, name: str) -> None:
+        """Apply a page's default split the first time it is shown for real.
+        Presets are built before the window has a size, so sizes set then are
+        lost; a user's own arrangement (saved on leaving a page) is kept."""
+        if name not in self._split_pending or not self.manager.isVisible():
+            return
+        key, sizes = SPLITS[name]
+        area = self._docks[key].dockAreaWidget()
+        if area is None:
+            return
+        current = list(self.manager.splitterSizes(area))
+        if len(current) != len(sizes) or sum(current) <= 0:
+            return
+        # Qt takes pixels, so scale the ratio to the splitter's real extent.
+        total, weight = sum(current), sum(sizes)
+        self.manager.setSplitterSizes(area, [round(total * s / weight) for s in sizes])
+        self._split_pending.discard(name)
 
     def reset(self) -> None:
+        """Rebuild every shipped page from its spec and open the default."""
+        for name in PRESET_NAMES:
+            self.apply_layout(name)
+            self.manager.addPerspective(name)
         self.apply_layout(DEFAULT_PERSPECTIVE)
 
     # ---- perspectives ----
@@ -205,7 +274,7 @@ class Workspace:
 
     def ensure_presets(self, settings: QSettings) -> None:
         """Load saved perspectives, then build any missing shipped preset so
-        the three are always available. Leaves the docks in the default
+        every page is always available. Leaves the docks in the default
         arrangement (a later restore_state may override it).
 
         If the saved panel set differs from the current one (a panel was added
@@ -228,6 +297,8 @@ class Workspace:
 
     def open_perspective(self, name: str) -> None:
         self.manager.openPerspective(name)
+        if name in PRESET_NAMES:
+            self.current_page = name
 
     def save_perspective(self, name: str, settings: QSettings | None = None) -> None:
         self.manager.addPerspective(name)

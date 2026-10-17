@@ -1,5 +1,7 @@
 """Tests for the Positions panel's pure cost-basis formatting (no QApplication)."""
 
+import pytest
+
 from cqd.engine.cost_basis import CostBasisResult, reconstruct_cost_basis
 from cqd.ui.panels.positions import format_cost_basis
 
@@ -87,3 +89,16 @@ def test_reconstruct_then_format_offline() -> None:
     assert avg == f"${cb.avg_cost:,.6f}"
     assert be == avg  # break-even == avg cost
     assert avg != "-"
+
+
+def test_book_totals_feed_the_header() -> None:
+    from cqd.ui.panels.positions import book_totals
+
+    rows = [("BTC", 0.1), ("USD", 1000.0), ("USDC", 500.0)]
+    marks = {"BTC": 80_000.0, "USD": 1.0, "USDC": 1.0}
+    out = book_totals(rows, marks, {"BTC": 70_000.0})
+    assert out["nav"] == pytest.approx(9_500.0)
+    assert out["unrealized"] == pytest.approx(1_000.0)
+    assert out["holdings"] == 1
+    assert out["cash_pct"] == pytest.approx(1500 / 9500)
+    assert book_totals([], {}, {})["cash_pct"] is None

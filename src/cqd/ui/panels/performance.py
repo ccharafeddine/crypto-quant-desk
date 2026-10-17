@@ -28,6 +28,7 @@ from cqd.engine.performance import (
     CASH_ASSETS,
     build_twr,
     drawdown_stats,
+    external_flows,
     realized_trades,
     trade_stats,
 )
@@ -40,6 +41,18 @@ _FOOTNOTE = (
     "realized PnL uses running average cost, fees included · non-USD-quoted "
     "PnL is labeled in its quote currency, never summed as USD."
 )
+
+
+def usd_fees_paid(trades: list[dict]) -> float:
+    """Total USD fees on USD-quoted trades (other quotes are never summed as USD)."""
+    from cqd.engine.cost_basis import quote_fee
+
+    total = 0.0
+    for t in trades:
+        symbol = str(t.get("symbol") or t.get("pair") or "")
+        if symbol.replace("/", "").endswith("USD"):
+            total += quote_fee(t, "USD")
+    return total
 
 
 def _fmt_pct(x: float) -> str:
@@ -57,12 +70,15 @@ class PerformancePanel(Panel):
 
     #: Current drawdown (engine's negative fraction) after each load - alert feed.
     drawdown_updated = Signal(float)
+    #: Everything the overview chart and KPI strip need, after each load:
+    #: {equity, twr, flows, btc, realized, fees, drawdown stats, rf, is_demo}.
+    performance_updated = Signal(object)
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
 
         header = PanelHeader("Performance")
-        self.demo_badge = Badge("DEMO")
+        self.demo_badge = Badge("EXAMPLE DATA", kind="neutral")
         self.demo_badge.setVisible(False)
         header.add_left(self.demo_badge)
         self._layout.addWidget(header)
@@ -140,6 +156,13 @@ class PerformancePanel(Panel):
                     except KrakenError:
                         continue  # equity curve reports it as unpriced
                 marks = await c.get_marks([f"{a}USD" for a in balances if a not in CASH_ASSETS])
+                # The benchmark: BTC buy-and-hold, fetched even when BTC isn't held.
+                btc_closes = closes.get("BTC")
+                if btc_closes is None:
+                    try:
+                        btc_closes = await c.get_ohlc_closes("XBTUSD", interval=1440)
+                    except KrakenError:
+                        btc_closes = []
         except KrakenAuthError:
             if self._is_current(gen):
                 self.status.error("Authentication failed. Check File > Settings.")
@@ -161,6 +184,7 @@ class PerformancePanel(Panel):
         self._render_plots(equity, twr)
         self._render_stats(dd, stats)
         self._render_positions(balances, trades, marks)
+        self._publish(equity, twr, ledgers, closes, btc_closes, trades, dd, stats, is_demo)
 
         caveats = []
         unpriced = equity.attrs.get("unpriced") or []
@@ -169,6 +193,27 @@ class PerformancePanel(Panel):
         n = len(equity)
         self.status.setText(
             f"{n} days of history" + (f" · {'; '.join(caveats)}" if caveats else "")
+        )
+
+    def _publish(self, equity, twr, ledgers, closes, btc_closes, trades, dd, stats, is_demo):
+        from cqd.ui.panels.overview import closes_series
+        from cqd.ui.settings_store import get_risk_free_rate
+
+        flows = external_flows(ledgers, closes, equity.index) if not equity.empty else None
+        self.performance_updated.emit(
+            {
+                "equity": equity,
+                "twr": twr,
+                "flows": flows,
+                "btc": closes_series(btc_closes or []),
+                "realized": stats.get("total_realized"),
+                "fees": usd_fees_paid(trades),
+                "max_drawdown": dd.get("max_drawdown"),
+                "underwater_days": dd.get("underwater_days"),
+                "last_close_value": float(equity.iloc[-1]) if not equity.empty else None,
+                "rf": get_risk_free_rate(),
+                "is_demo": is_demo,
+            }
         )
 
     # ---------- rendering ----------

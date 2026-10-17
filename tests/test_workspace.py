@@ -1,4 +1,4 @@
-"""Tests for the adjustable QtAds workspace (E1).
+"""Tests for the paged QtAds workspace (E1, Graphite pages).
 
 Two layers: pure validation of the layout specs (no QApplication), and a real
 QtAds round-trip (perspectives, save/restore, reset) behind pytest-qt so the
@@ -19,18 +19,37 @@ from cqd.ui.workspace import (
     PRESET_NAMES,
     STATE_KEY,
     Workspace,
+    page_panels,
     validate_layout,
+    validate_pages,
 )
 
 # ---------------------------------------------------------------- pure specs
 
 
-def test_all_presets_are_valid_and_complete() -> None:
+def test_all_pages_are_valid_and_every_panel_is_reachable() -> None:
+    validate_pages(LAYOUTS)  # must not raise
     for name in PRESET_NAMES:
-        placements = LAYOUTS[name]
-        validate_layout(placements)  # must not raise
-        keys = [key for key, _area, _target in placements]
-        assert sorted(keys) == sorted(PANEL_KEYS), f"{name} must place every panel once"
+        keys = page_panels(name)
+        assert len(keys) == len(set(keys)) and 1 <= len(keys) <= 4, name  # readable pages
+
+
+def test_validate_pages_rejects_an_unreachable_panel() -> None:
+    center = LAYOUTS["Trading"][0][1]
+    with pytest.raises(ValueError, match="no page shows"):
+        validate_pages({"Only": [("chart", center, None)]})
+
+
+def test_nav_targets_exist() -> None:
+    from cqd.ui.shell import PAGE_TITLES, nav_items
+
+    items = nav_items()
+    for item in items:
+        assert item.page in PRESET_NAMES
+        assert item.focus in page_panels(item.page), item
+    assert set(PAGE_TITLES) == set(PRESET_NAMES)
+    # Every panel has a nav entry somewhere.
+    assert {i.focus for i in items} | {"book"} >= set(PANEL_KEYS) - {"book"}
 
 
 def test_default_perspective_is_a_shipped_preset() -> None:
@@ -76,10 +95,9 @@ def test_validate_rejects_bad_area() -> None:
         validate_layout([("chart", 999, None)])
 
 
-def test_validate_rejects_incomplete_layout() -> None:
-    center = LAYOUTS["Trading"][0][1]
+def test_validate_rejects_empty_page() -> None:
     with pytest.raises(ValueError):
-        validate_layout([("chart", center, None)])  # only one of nine panels
+        validate_layout([])
 
 
 # ------------------------------------------------------------- QtAds round-trip
@@ -131,16 +149,29 @@ def test_apply_layout_preserves_all_panels(make_workspace, tmp_path) -> None:
     for name in PRESET_NAMES:
         ws.apply_layout(name)
         assert set(ws.manager.dockWidgetsMap().keys()) == set(PANEL_KEYS)
+        # Only the page's own cards are open.
+        assert ws.open_panels() == set(page_panels(name)), name
+
+
+def test_show_page_opens_the_page_and_focuses_a_card(make_workspace, tmp_path) -> None:
+    ws = make_workspace()
+    ws.ensure_presets(_ini(tmp_path, "s.ini"))
+    ws.show_page("Risk", "alerts")
+    assert ws.current_page == "Risk"
+    assert ws.open_panels() == set(page_panels("Risk"))
+    ws.show_page("Portfolio", "performance")
+    assert ws.open_panels() == set(page_panels("Portfolio"))
+    assert ws._docks["performance"].isCurrentTab()
 
 
 def test_state_save_restore_roundtrip(make_workspace, tmp_path) -> None:
     ws = make_workspace()
     ws.ensure_presets(_ini(tmp_path, "s.ini"))
-    ws.apply_layout("Analysis")
+    ws.apply_layout("Risk")
     settings = _ini(tmp_path, "state.ini")
     ws.save_state(settings)
     # Mutate away, then restore should succeed and keep every panel.
-    ws.apply_layout("Monitor")
+    ws.apply_layout("Markets")
     assert ws.restore_state(settings) is True
     assert set(ws.manager.dockWidgetsMap().keys()) == set(PANEL_KEYS)
 
@@ -175,7 +206,7 @@ def test_save_and_delete_custom_perspective(make_workspace, tmp_path) -> None:
 def test_reset_returns_to_default_with_all_panels(make_workspace, tmp_path) -> None:
     ws = make_workspace()
     ws.ensure_presets(_ini(tmp_path, "s.ini"))
-    ws.apply_layout("Monitor")
+    ws.apply_layout("Markets")
     ws.reset()
     assert set(ws.manager.dockWidgetsMap().keys()) == set(PANEL_KEYS)
 
@@ -210,3 +241,20 @@ def test_toggle_actions_cover_every_panel(make_workspace) -> None:
     actions = ws.toggle_actions()
     assert len(actions) == len(PANEL_KEYS)
     assert [a.text() for a in actions] == [k.title() for k in PANEL_KEYS]
+
+
+
+def test_signals_page_gives_the_signals_card_the_wider_split(
+    make_workspace, tmp_path, qtbot
+) -> None:
+    ws = make_workspace()
+    host = ws.manager.window()
+    host.resize(1500, 900)
+    host.show()
+    qtbot.waitExposed(host)
+    ws.ensure_presets(_ini(tmp_path, "s.ini"))
+    ws.show_page("Signals")
+    qtbot.wait(50)
+    signals = ws._docks["signals"].width()
+    chart = ws._docks["chart"].width()
+    assert signals > 1.3 * chart, (signals, chart)

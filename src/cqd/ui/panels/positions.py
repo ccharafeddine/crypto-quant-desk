@@ -21,6 +21,8 @@ from PySide6.QtWidgets import (
 from cqd.data.client import make_client
 from cqd.data.exchange import KrakenClient
 from cqd.engine.cost_basis import CostBasisResult, reconstruct_cost_basis
+from cqd.engine.performance import CASH_ASSETS
+from cqd.ui.format import format_price, format_qty
 from cqd.ui.panels.base import Panel
 from cqd.ui.widgets import PanelHeader, PanelStatus
 
@@ -57,12 +59,15 @@ class PositionsPanel(Panel):
     symbols_available = Signal(list)  # ["BTC/USD", ...]
     #: Per-tick unrealized PnL vs average cost, in percent (alert feed).
     pnl_tick = Signal(str, float)  # asset, signed pct
+    #: Book totals for the header/KPI strip: {nav, unrealized, holdings, cash_pct}.
+    book_updated = Signal(dict)
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self._row_data: list[tuple[str, float]] = []
         self._live_marks: dict[str, float] = {}
         self._avg_costs: dict[str, float] = {}
+        self._marks: dict[str, float] = {}
 
         self._layout.addWidget(PanelHeader("Positions"))
 
@@ -142,11 +147,18 @@ class PositionsPanel(Panel):
             avg_str, be_str = format_cost_basis(cb)
 
             self.table.setItem(i, 0, _cell(asset, align_left=True))
-            self.table.setItem(i, 1, _cell(f"{qty:,.6f}"))
-            self.table.setItem(i, 2, _cell(f"${mark:,.6f}" if mark else "-"))
+            self.table.setItem(i, 1, _cell(format_qty(qty)))
+            self.table.setItem(i, 2, _cell(format_usd_price(mark) if mark else "—"))
             self.table.setItem(i, 3, _cell(f"${value:,.2f}" if mark else "-"))
             self.table.setItem(i, 4, _cell(avg_str))
             self.table.setItem(i, 5, _cell(be_str))
+        self._marks = {
+            a: (1.0 if a == "USD" else float(marks.get(f"{a}/USD") or 0.0)) for a, _ in rows
+        }
+        self._emit_book()
+
+    def _emit_book(self) -> None:
+        self.book_updated.emit(book_totals(self._row_data, self._marks, self._avg_costs))
 
     # ---------- live stream ----------
 
@@ -162,13 +174,15 @@ class PositionsPanel(Panel):
                 return
             prev = self._live_marks.get(symbol)
             self._live_marks[symbol] = price
-            mark_item.setText(f"${price:,.6f}")
+            mark_item.setText(format_usd_price(price))
             value_item.setText(f"${qty * price:,.2f}")
             if prev is not None and price != prev:
                 self._flash(value_item, up=price > prev)
             avg = self._avg_costs.get(asset)
             if avg:
                 self.pnl_tick.emit(asset, (price / avg - 1.0) * 100.0)
+            self._marks[asset] = price
+            self._emit_book()
             return
 
     def _flash(self, item: QTableWidgetItem, *, up: bool) -> None:
@@ -203,12 +217,35 @@ class PositionsPanel(Panel):
         asyncio.ensure_future(self.load())
 
 
+def book_totals(
+    rows: list[tuple[str, float]], marks: dict[str, float], avg_costs: dict[str, float]
+) -> dict:
+    """NAV, unrealized P&L (USD-basis lots only), holding count and cash share."""
+    nav = sum(qty * marks.get(asset, 0.0) for asset, qty in rows)
+    cash = sum(qty * marks.get(asset, 0.0) for asset, qty in rows if asset in CASH_ASSETS)
+    unreal = sum(
+        qty * (marks[asset] - avg_costs[asset])
+        for asset, qty in rows
+        if asset in avg_costs and marks.get(asset)
+    )
+    return {
+        "nav": nav,
+        "unrealized": unreal,
+        "holdings": sum(1 for asset, _ in rows if asset not in CASH_ASSETS),
+        "cash_pct": (cash / nav) if nav > 0 else None,
+    }
+
+
 def _safe_cost_basis(trades: list[dict], asset: str) -> CostBasisResult | None:
     """Per-asset cost basis; one asset's failure must not break the whole table."""
     try:
         return reconstruct_cost_basis(trades, asset)
     except Exception:  # noqa: BLE001
         return None
+
+
+def format_usd_price(price: float) -> str:
+    return f"${format_price(price)}"
 
 
 def _cell(text: str, align_left: bool = False) -> QTableWidgetItem:
