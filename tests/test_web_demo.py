@@ -5,12 +5,15 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+import zipfile
+from pathlib import Path
 
 import numpy as np
 import pytest
 
 from cqd.web import demo
 
+ROOT = Path(__file__).resolve().parents[1]
 DAY = 86_400
 
 
@@ -112,3 +115,34 @@ def test_demo_imports_no_order_ui_or_network_code() -> None:
     )
     res = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
     assert res.stdout.strip() == "[]"
+
+
+def test_build_ships_only_the_engine(tmp_path: Path) -> None:
+    sys.path.insert(0, str(ROOT / "scripts"))
+    try:
+        import build_web_demo
+    finally:
+        sys.path.pop(0)
+    manifest = build_web_demo.build(tmp_path / "dist")
+    names = zipfile.ZipFile(tmp_path / "dist" / "cqd-engine.zip").namelist()
+    assert "cqd/web/demo.py" in names and "cqd/data/crash_history.json" in names
+    assert not [n for n in names if n.startswith(("cqd/trading", "cqd/ui"))]
+    assert {"index.html", "app.js", "worker.js", "_headers"} <= set(manifest["files"])
+    app = (tmp_path / "dist" / "app.js").read_text(encoding="utf-8")
+    assert "https://api.kraken.com/0/public/" in app and "/0/private" not in app
+    # every engine module the demo imports is in the bundle
+    for mod in ("var", "stress", "attribution", "backtest", "signals", "risk", "indicators"):
+        assert f"cqd/engine/{mod}.py" in names
+
+
+def test_build_refuses_a_bundle_with_order_code(tmp_path: Path, monkeypatch) -> None:
+    sys.path.insert(0, str(ROOT / "scripts"))
+    try:
+        import build_web_demo
+    finally:
+        sys.path.pop(0)
+    monkeypatch.setattr(
+        build_web_demo, "ENGINE_FILES", [*build_web_demo.ENGINE_FILES, "cqd/trading/orders.py"]
+    )
+    with pytest.raises(SystemExit, match="refused"):
+        build_web_demo.build(tmp_path / "dist")
