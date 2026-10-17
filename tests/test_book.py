@@ -22,13 +22,13 @@ def test_cumulative_totals_empty() -> None:
 def test_format_spread_absolute_and_pct() -> None:
     # bid 100, ask 100.1 -> spread 0.1, mid 100.05 -> ~0.10%.
     text = format_spread(100.0, 100.1)
-    assert text.startswith("0.1 (")
+    assert text.startswith("0.10 (")
     assert text.endswith("%)")
     assert "0.10%" in text
 
 
 def test_format_spread_zero_when_touching() -> None:
-    assert format_spread(100.0, 100.0) == "0 (0.00%)"
+    assert format_spread(100.0, 100.0) == "0.00 (0.00%)"
 
 
 def test_format_spread_guards_nonpositive_mid() -> None:

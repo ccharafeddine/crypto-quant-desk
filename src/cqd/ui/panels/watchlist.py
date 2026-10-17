@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
 
 from cqd.data.errors import KrakenError
 from cqd.data.rest import KrakenRESTClient
-from cqd.ui.format import format_compact
+from cqd.ui.format import display_pair, format_compact, format_price
 from cqd.ui.panels.base import Panel
 from cqd.ui.theme import get_theme, load_theme_name
 from cqd.ui.widgets import PanelHeader, PanelStatus
@@ -181,8 +181,8 @@ class WatchlistPanel(Panel):
             ws = to_ws_pair(t.symbol)
             self._rows.append(ws)
             pct = pct_change(t.last, t.open)
-            self.table.setItem(row, 0, _cell(t.symbol, Qt.AlignmentFlag.AlignLeft))
-            self.table.setItem(row, 1, _cell(f"{t.last:,.8g}"))
+            self.table.setItem(row, 0, _cell(display_pair(t.symbol), Qt.AlignmentFlag.AlignLeft))
+            self.table.setItem(row, 1, _cell(format_price(t.last)))
             pct_item = _cell(f"{pct:+.2f}%")
             pct_item.setForeground(QColor(theme.positive if pct >= 0 else theme.negative))
             self.table.setItem(row, 2, pct_item)

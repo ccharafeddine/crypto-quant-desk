@@ -125,7 +125,7 @@ def test_backtest_rows_show_r_costs_and_out_of_sample() -> None:
     )
     rows = dict(build_signals_view(None, _features(), None, _verdict(), stats, None).backtest_rows)
     assert rows["Expectancy (R)"] == "+0.25R"
-    assert rows["Costs paid"] == "42.5"
+    assert rows["Costs paid"] == "42.50"
     assert rows["Out-of-sample"] == "-0.10R over 7 trades, -1.2% (3 folds)"
     # Without a walk-forward the line is an honest dash, not a zero.
     rows = dict(

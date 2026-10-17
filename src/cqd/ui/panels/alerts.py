@@ -10,7 +10,6 @@ from __future__ import annotations
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QComboBox,
-    QDoubleSpinBox,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -25,7 +24,7 @@ from PySide6.QtWidgets import (
 from cqd.alerts.engine import AlertRule
 from cqd.ui import services
 from cqd.ui.panels.base import Panel
-from cqd.ui.widgets import PanelHeader
+from cqd.ui.widgets import PanelHeader, TrimmedDoubleSpinBox
 
 _KIND_LABELS = [
     ("price_above", "Price above"),
@@ -58,7 +57,7 @@ class AlertsPanel(Panel):
         self.target_edit = QLineEdit()
         self.target_edit.setPlaceholderText("BTC/USD")
         form.addWidget(self.target_edit, 1)
-        self.threshold_spin = QDoubleSpinBox()
+        self.threshold_spin = TrimmedDoubleSpinBox()
         self.threshold_spin.setRange(0.0, 1e12)
         self.threshold_spin.setDecimals(8)
         form.addWidget(self.threshold_spin, 1)

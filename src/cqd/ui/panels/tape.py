@@ -1,7 +1,8 @@
 """Time & Sales tape: streaming public trades for the active symbol.
 
 Rides the WebSocket `trade` channel via StreamBridge - each trade prepends a row
-(newest on top), price colored by side. Only trades for the active symbol are
+(newest on top). Buy/sell are neutral side labels (green/red is reserved
+for profit and loss), quantities are fixed-notation (never 6e-05). Only trades for the active symbol are
 shown; the list is capped so it never grows unbounded.
 """
 
@@ -11,6 +12,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QHeaderView, QLabel, QTableWidget, QTableWidgetItem
 
+from cqd.ui.format import format_price, format_qty
 from cqd.ui.panels.base import Panel
 from cqd.ui.theme import get_theme, load_theme_name
 from cqd.ui.widgets import PanelHeader
@@ -67,19 +69,22 @@ class TapePanel(Panel):
             return
         self.status.setText("")
         theme = get_theme(load_theme_name())
-        color = QColor(theme.positive if trade.side == "buy" else theme.negative)
         self.table.insertRow(0)
         time_item = _cell(format_trade_time(trade.timestamp), Qt.AlignmentFlag.AlignLeft)
-        price_item = _cell(f"{trade.price:,.8g}")
-        price_item.setForeground(color)
-        side_item = _cell(trade.side or "-", Qt.AlignmentFlag.AlignLeft)
-        side_item.setForeground(color)
+        price_item = _cell(format_price(trade.price))
+        side_item = _cell(format_side(trade.side), Qt.AlignmentFlag.AlignLeft)
+        side_item.setForeground(QColor(theme.text if trade.side == "buy" else theme.text_muted))
         self.table.setItem(0, 0, time_item)
         self.table.setItem(0, 1, price_item)
-        self.table.setItem(0, 2, _cell(f"{trade.qty:,.6g}"))
+        self.table.setItem(0, 2, _cell(format_qty(trade.qty)))
         self.table.setItem(0, 3, side_item)
         while self.table.rowCount() > _MAX_ROWS:
             self.table.removeRow(self.table.rowCount() - 1)
+
+
+def format_side(side: str | None) -> str:
+    """Neutral side label: 'buy' -> 'BUY', missing -> '—'."""
+    return side.upper() if side else "—"
 
 
 def _cell(text: str, align=Qt.AlignmentFlag.AlignRight) -> QTableWidgetItem:

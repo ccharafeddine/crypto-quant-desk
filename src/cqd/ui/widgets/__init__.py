@@ -8,7 +8,14 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QSizePolicy, QWidget
+from PySide6.QtWidgets import (
+    QDoubleSpinBox,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QSizePolicy,
+    QWidget,
+)
 
 # Only the error state surfaces a Retry button; loading/ok/empty are
 # informational (FRONTEND_GUIDELINES: error = message + Retry, panel stays
@@ -22,11 +29,15 @@ def status_shows_retry(kind: str) -> bool:
 
 
 class Badge(QLabel):
-    """A small accent-tinted pill that hugs its text (never spans full width)."""
+    """A small outlined chip that hugs its text (never spans full width).
 
-    def __init__(self, text: str = "", parent: QWidget | None = None) -> None:
+    `kind` picks the outline colour: "" (accent), "neutral", "live", "go", "warn".
+    """
+
+    def __init__(self, text: str = "", parent: QWidget | None = None, kind: str = "") -> None:
         super().__init__(text, parent)
         self.setProperty("role", "badge")
+        self.setProperty("kind", kind)
         # Maximum policy keeps the pill the width of its text, not the column.
         self.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
 
@@ -110,3 +121,28 @@ class PanelStatus(QWidget):
     def error(self, text: str) -> None:
         """Show an error message and reveal the Retry button."""
         self._set("error", text)
+
+
+def trim_decimal_text(value: float, decimals: int) -> str:
+    """'0.00000000' -> '0', '2.50000000' -> '2.5': the spin box keeps its full
+    precision for input but never displays a wall of zeros."""
+    text = f"{value:.{decimals}f}"
+    if "." in text:
+        text = text.rstrip("0").rstrip(".")
+    return "0" if text in ("-0", "") else text
+
+
+class TrimmedDoubleSpinBox(QDoubleSpinBox):
+    """A QDoubleSpinBox that accepts 8 decimals but displays trimmed values."""
+
+    def textFromValue(self, value: float) -> str:  # noqa: N802 - Qt naming
+        return trim_decimal_text(value, self.decimals())
+
+
+def set_kind(widget: QWidget, prop: str, value: str) -> None:
+    """Change a styling property (e.g. a Badge's kind, a label's tone) and
+    re-polish so the stylesheet picks it up immediately."""
+    widget.setProperty(prop, value)
+    style = widget.style()
+    style.unpolish(widget)
+    style.polish(widget)

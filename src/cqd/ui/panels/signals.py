@@ -20,6 +20,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QLabel, QPushButton
 
 from cqd.data.symbols import parse_symbol
+from cqd.ui.format import format_price
 from cqd.ui.panels.base import Panel
 from cqd.ui.widgets import Badge, PanelHeader, PanelStatus
 
@@ -44,7 +45,7 @@ def _num(x, places: int = 2) -> str:
 
 
 def _money(x) -> str:
-    return "—" if (x is None or _is_nan(x)) else f"{x:,.8g}"
+    return "—" if (x is None or _is_nan(x)) else format_price(x)
 
 
 def _pct(x, places: int = 1) -> str:

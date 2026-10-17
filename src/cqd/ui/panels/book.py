@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 
 from cqd.data.errors import KrakenError
 from cqd.data.rest import KrakenRESTClient
+from cqd.ui.format import display_pair, format_price
 from cqd.ui.panels.base import Panel
 from cqd.ui.theme import get_theme, load_theme_name
 from cqd.ui.widgets import PanelHeader, PanelStatus
@@ -52,7 +53,7 @@ def format_spread(best_bid: float, best_ask: float) -> str:
     if mid <= 0:
         return "-"
     spread = best_ask - best_bid
-    return f"{spread:,.8g} ({spread / mid * 100:.2f}%)"
+    return f"{format_price(spread)} ({spread / mid * 100:.2f}%)"
 
 
 class DepthBarDelegate(QStyledItemDelegate):
@@ -99,7 +100,9 @@ class BookPanel(Panel):
         header.add_left(self.pair_label)
         self._layout.addWidget(header)
 
-        self.asks_table = self._make_table(theme.negative)
+        # Neutral depth: sides read from position (asks above the spread, bids
+        # below) and labels, not from P&L colours.
+        self.asks_table = self._make_table(theme.text_faint)
         self._layout.addWidget(self.asks_table, 1)
 
         self.spread_label = QLabel("")
@@ -107,7 +110,7 @@ class BookPanel(Panel):
         self.spread_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._layout.addWidget(self.spread_label)
 
-        self.bids_table = self._make_table(theme.positive, show_header=False)
+        self.bids_table = self._make_table(theme.text_faint, show_header=False)
         self._layout.addWidget(self.bids_table, 1)
 
         self.status = PanelStatus("Waiting for a pair.", self.refresh)
@@ -139,7 +142,7 @@ class BookPanel(Panel):
     def set_pair(self, friendly: str) -> None:
         """Follow the active symbol (friendly form, e.g. XBTUSD)."""
         self._pair = friendly
-        self.pair_label.setText(friendly)
+        self.pair_label.setText(display_pair(friendly))
         self._poll()
 
     def _emit_click(self, prices: list[float], row: int) -> None:
@@ -183,7 +186,7 @@ class BookPanel(Panel):
         for display_row, i in enumerate(reversed(range(len(asks)))):
             price, size = asks[i]
             self._fill_row(
-                self.asks_table, display_row, price, size, ask_cum[i], max_total, theme.negative
+                self.asks_table, display_row, price, size, ask_cum[i], max_total, theme.text_muted
             )
             self._ask_prices[display_row] = price
 
@@ -191,7 +194,7 @@ class BookPanel(Panel):
         self.bids_table.clearContents()
         self._bid_prices = [0.0] * _LEVELS
         for i, (price, size) in enumerate(bids):
-            self._fill_row(self.bids_table, i, price, size, bid_cum[i], max_total, theme.positive)
+            self._fill_row(self.bids_table, i, price, size, bid_cum[i], max_total, theme.text)
             self._bid_prices[i] = price
 
         if bids and asks:
@@ -203,7 +206,7 @@ class BookPanel(Panel):
         self, table, row: int, price: float, size: float, cum: float, max_total: float, color: str
     ) -> None:
         frac = cum / max_total if max_total else 0.0
-        price_item = _cell(f"{price:,.8g}")
+        price_item = _cell(format_price(price))
         price_item.setForeground(QColor(color))
         size_item = _cell(f"{size:,.4f}")
         total_item = _cell(f"{cum:,.4f}")  # cumulative depth through this level

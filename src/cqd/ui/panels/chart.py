@@ -18,6 +18,7 @@ from PySide6.QtWidgets import QButtonGroup, QHBoxLayout, QLabel, QPushButton, QW
 from cqd.data.errors import KrakenError
 from cqd.data.normalize import Candle
 from cqd.data.rest import KrakenRESTClient
+from cqd.ui.format import display_pair, format_compact, format_price
 from cqd.ui.panels.base import Panel
 from cqd.ui.theme import get_theme, load_theme_name
 from cqd.ui.widgets import PanelHeader, PanelStatus
@@ -48,10 +49,11 @@ def nearest_candle(candles: list[Candle], x: float) -> Candle | None:
 
 
 def format_readout(c: Candle) -> str:
-    """Mono OHLCV line for the crosshair label. `8g` keeps tick precision without
-    trailing-zero noise across BTC-scale and sub-cent prices alike."""
+    """Mono OHLCV line for the crosshair label: magnitude-aware decimals and
+    never scientific notation, across BTC-scale and sub-cent prices alike."""
     return (
-        f"O {c.open:,.8g}   H {c.high:,.8g}   L {c.low:,.8g}   C {c.close:,.8g}   V {c.volume:,.4g}"
+        f"O {format_price(c.open)}   H {format_price(c.high)}   L {format_price(c.low)}"
+        f"   C {format_price(c.close)}   V {format_compact(c.volume)}"
     )
 
 
@@ -107,7 +109,7 @@ class ChartPanel(Panel):
         theme = get_theme(load_theme_name())
 
         header = PanelHeader("Chart")
-        self.pair_label = QLabel(self._pair)
+        self.pair_label = QLabel(display_pair(self._pair))
         self.pair_label.setProperty("role", "subtitle")
         header.add_left(self.pair_label)
         header.add_right(self._build_timeframes())
@@ -179,7 +181,7 @@ class ChartPanel(Panel):
         """Follow the active symbol (Kraken friendly form, e.g. XBTUSD)."""
         if friendly and friendly != self._pair:
             self._pair = friendly
-            self.pair_label.setText(friendly)
+            self.pair_label.setText(display_pair(friendly))
             self._reload()
 
     def set_cost_basis(self, price: float | None) -> None:
@@ -193,7 +195,7 @@ class ChartPanel(Panel):
                 pos=price,
                 angle=0,
                 pen=pg.mkPen(theme.accent, style=Qt.PenStyle.DashLine),
-                label=f"cost {price:,.8g}",
+                label=f"avg cost {format_price(price)}",
                 labelOpts={"color": theme.accent, "position": 0.05},
             )
             self.price_plot.addItem(self._cost_line, ignoreBounds=True)
