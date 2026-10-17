@@ -308,3 +308,22 @@ def test_replay_exposes_a_close_marked_curve_and_ci() -> None:
     assert bootstrap_mean_ci([1.0, 1.0]) == (1.0, 1.0)
     # Deterministic: same input, same interval.
     assert bootstrap_mean_ci([0.5, -1.0, 2.0]) == bootstrap_mean_ci([0.5, -1.0, 2.0])
+
+
+def test_parameter_stability_grid_scores_valid_cells_only() -> None:
+    from cqd.engine.backtest import PropLimits, parameter_stability
+
+    candles = _gbm(700, seed=3)
+    params = StrategyParams(fast=20, slow=50, trend=120)
+    grid = parameter_stability(
+        candles, params, PropLimits(starting_equity=10_000.0), fasts=(10, 20, 60), slows=(50, 100)
+    )
+    assert grid.fasts == [10, 20, 60] and grid.slows == [50, 100]
+    assert grid.cells[2][0] is None  # fast 60 >= slow 50: invalid
+    assert grid.chosen == (1, 0)
+    scored = [v for row in grid.cells for v in row if v is not None]
+    assert scored and grid.positive_share is not None and 0.0 <= grid.positive_share <= 1.0
+    assert grid.neighbourhood_mean is not None
+    for row, trow in zip(grid.cells, grid.trades, strict=True):
+        for v, n in zip(row, trow, strict=True):
+            assert v is None or n >= 3

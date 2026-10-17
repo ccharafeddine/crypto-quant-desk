@@ -560,7 +560,78 @@ def walk_forward(
     )
 
 
+FAST_GRID: tuple[int, ...] = (5, 10, 15, 20, 30, 40)
+SLOW_GRID: tuple[int, ...] = (30, 50, 75, 100, 150)
+
+
+class StabilityGrid(BaseModel):
+    """Net expectancy (R per trade, costs in) over a fast x slow grid.
+
+    `cells[i][j]` is for fast=fasts[i], slow=slows[j]; None where the combo is
+    invalid (fast >= slow, slow >= trend) or traded too little to score. A
+    strategy worth trusting sits on a plateau of positive cells, not a spike.
+    """
+
+    fasts: list[int]
+    slows: list[int]
+    cells: list[list[float | None]]
+    trades: list[list[int]]
+    chosen: tuple[int, int]
+    positive_share: float | None
+    neighbourhood_mean: float | None
+
+
+def parameter_stability(
+    candles: list[Candle],
+    params: StrategyParams,
+    limits: PropLimits,
+    *,
+    fasts: tuple[int, ...] = FAST_GRID,
+    slows: tuple[int, ...] = SLOW_GRID,
+    min_trades: int = 3,
+) -> StabilityGrid:
+    """Replay every valid (fast, slow) with costs and prop limits disabled."""
+    research = _research_limits(limits)
+    cells: list[list[float | None]] = []
+    trades: list[list[int]] = []
+    for f in fasts:
+        row: list[float | None] = []
+        trow: list[int] = []
+        for sl in slows:
+            if not (f < sl < params.trend):
+                row.append(None)
+                trow.append(0)
+                continue
+            st = replay(candles, params.model_copy(update={"fast": f, "slow": sl}), research)
+            trow.append(st.trades)
+            row.append(st.expectancy_r if st.trades >= min_trades else None)
+        cells.append(row)
+        trades.append(trow)
+    scored = [v for row in cells for v in row if v is not None]
+    positive = sum(1 for v in scored if v > 0) / len(scored) if scored else None
+    # Mean of the chosen cell and its 8 neighbours (where scored): plateau check.
+    ci = min(range(len(fasts)), key=lambda i: abs(fasts[i] - params.fast))
+    cj = min(range(len(slows)), key=lambda j: abs(slows[j] - params.slow))
+    hood = [
+        cells[i][j]
+        for i in range(max(0, ci - 1), min(len(fasts), ci + 2))
+        for j in range(max(0, cj - 1), min(len(slows), cj + 2))
+        if cells[i][j] is not None
+    ]
+    return StabilityGrid(
+        fasts=list(fasts),
+        slows=list(slows),
+        cells=cells,
+        trades=trades,
+        chosen=(ci, cj),
+        positive_share=positive,
+        neighbourhood_mean=sum(hood) / len(hood) if hood else None,
+    )
+
+
 __all__ = [
+    "StabilityGrid",
+    "parameter_stability",
     "PAPER_SLIPPAGE_BPS",
     "PAPER_TAKER_FEE_BPS",
     "PropLimits",
