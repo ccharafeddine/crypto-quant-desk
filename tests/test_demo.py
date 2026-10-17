@@ -193,3 +193,17 @@ def test_demo_market_client_is_injected() -> None:
 
     d = DemoClient(market_client=_FakeMarket())
     assert isinstance(d._client, _FakeMarket)
+
+
+def test_demo_client_serves_public_depth_for_the_signals_spread_gate() -> None:
+    calls: list[tuple[str, int]] = []
+
+    class _FakeMarket:
+        async def get_depth(self, pair: str, *, count: int = 25):
+            calls.append((pair, count))
+            return {"bids": [(100.0, 1.0)], "asks": [(100.1, 1.0)]}
+
+    d = DemoClient(market_client=_FakeMarket())
+    book = asyncio.run(d.get_depth("XBTUSD", count=5))
+    assert calls == [("XBTUSD", 5)]
+    assert book["asks"][0][0] == 100.1

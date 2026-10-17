@@ -205,3 +205,8 @@ class DemoClient:
 
     async def get_tickers(self, pairs: list[str]):
         return await self._client.get_tickers(pairs)
+
+    async def get_depth(self, pair: str, *, count: int = 25):
+        # Public order book, no keys: the signals service needs it for the
+        # spread gate, so demo mode must expose it like the live clients.
+        return await self._client.get_depth(pair, count=count)
