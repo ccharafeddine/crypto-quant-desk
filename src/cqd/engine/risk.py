@@ -152,9 +152,16 @@ def portfolio_beta(weights: pd.Series, betas: pd.Series) -> float:
 
 
 def tail_metrics(
-    returns: pd.Series, periods_per_year: int = M.PERIODS_PER_YEAR
+    returns: pd.Series,
+    periods_per_year: int = M.PERIODS_PER_YEAR,
+    rf_annual: float = 0.0,
 ) -> dict[str, float]:
-    """Comprehensive tail risk metrics for a return series."""
+    """Comprehensive tail risk metrics for a return series.
+
+    Sortino, Calmar and max drawdown come from the SAME functions the Analytics
+    panel uses (`metrics.sortino_ratio` / `calmar_ratio` / `wealth_index`), so
+    the two screens can never define them differently.
+    """
     r = returns.dropna()
     if r.empty:
         return {}
@@ -166,15 +173,9 @@ def tail_metrics(
     skew = float(r.skew())
     kurt = float(r.kurtosis())  # excess kurtosis
 
-    downside = r[r < 0.0]
-    downside_vol = (
-        float(downside.std() * np.sqrt(periods_per_year)) if len(downside) > 1 else np.nan
-    )
-    ann_ret = M.annualize_return(r, periods_per_year)
-    sortino = ann_ret / downside_vol if downside_vol and downside_vol > 0 else np.nan
-
-    mdd = M.max_drawdown(pd.Series((1 + r).cumprod()))
-    calmar = ann_ret / abs(mdd) if mdd and not np.isnan(mdd) and mdd != 0 else np.nan
+    sortino = M.sortino_ratio(r, rf_annual, periods_per_year)
+    mdd = M.max_drawdown(M.wealth_index(r))
+    calmar = M.calmar_ratio(r, periods_per_year)
 
     return {
         "VaR_95": var95,
@@ -233,6 +234,7 @@ def compute_portfolio_risk(
     returns : daily simple-return DataFrame, one column per asset. Must
               include `btc_col` for beta. Index is dates.
     btc_col : the BTC column name in `returns`.
+    rf_annual : annual risk-free rate used by the Sortino in `tail` (decimal).
 
     Portfolio vol / risk contribution / tail metrics are computed over the
     COMMON-HISTORY window: rows where every included asset has data. Leading
@@ -276,7 +278,7 @@ def compute_portfolio_risk(
         book_beta_btc=portfolio_beta(w, per_beta),
         per_asset_beta=per_beta,
         risk_contribution=risk_contribution_pct(w, cov),
-        tail=tail_metrics(port_rets),
+        tail=tail_metrics(port_rets, rf_annual=rf_annual),
         window_days=window_days,
         frame_days=frame_days,
         excluded_assets=excluded,

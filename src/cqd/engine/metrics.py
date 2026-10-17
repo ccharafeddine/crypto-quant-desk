@@ -74,6 +74,18 @@ def sharpe_ratio(
     return float(np.sqrt(periods_per_year) * excess.mean() / vol)
 
 
+def wealth_index(returns: pd.Series) -> pd.Series:
+    """Compounded wealth from periodic returns, STARTING at 1.0.
+
+    The leading 1.0 is the point the first return is measured from. Without it
+    `(1+r).cumprod()` begins at 1+r0, so a loss on the first day is never seen
+    as a drawdown (-20%, +5%, +5% read as 0% max drawdown). Positional index
+    (the start point has no date of its own); use for drawdown math only.
+    """
+    r = returns.dropna().astype(float).to_numpy()
+    return pd.Series(np.concatenate([[1.0], np.cumprod(1.0 + r)]))
+
+
 def max_drawdown(values: pd.Series) -> float:
     """Maximum drawdown from a value series. Returns a negative decimal."""
     v = values.dropna().astype(float).sort_index()
@@ -146,8 +158,7 @@ def calmar_ratio(returns: pd.Series, periods_per_year: int = PERIODS_PER_YEAR) -
     r = returns.dropna()
     if r.empty:
         return np.nan
-    equity = (1.0 + r).cumprod()
-    mdd = max_drawdown(equity)
+    mdd = max_drawdown(wealth_index(r))
     if mdd == 0 or np.isnan(mdd):
         return np.nan
     return float(annualize_return(r, periods_per_year) / abs(mdd))
@@ -178,7 +189,7 @@ def ratio_summary(returns: pd.Series, rf_annual: float = 0.0) -> dict[str, float
 
     A single dict so the analytics panel stays a thin view over tested math.
     """
-    equity = (1.0 + returns.dropna()).cumprod()
+    equity = wealth_index(returns)
     var95, cvar95 = var_cvar(returns, 0.95)
     return {
         "ann_return": annualize_return(returns),

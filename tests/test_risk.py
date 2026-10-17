@@ -225,3 +225,46 @@ class TestOrchestrator:
         assert pr.weights.sum() == pytest.approx(1.0)
         assert list(pr.weights.index) == ["BTC"]
         assert pr.ann_vol > 0
+
+
+# ---------- Phase 1 regressions: drawdown from the start, one Sortino ----------
+
+
+class TestDrawdownIncludesStart:
+    def test_first_day_loss_is_a_drawdown(self):
+        # Before the fix (1+r).cumprod() started at 0.8, so this read 0%.
+        r = pd.Series([-0.20, 0.05, 0.05])
+        assert M.max_drawdown(M.wealth_index(r)) == pytest.approx(-0.20)
+        assert M.ratio_summary(r)["max_drawdown"] == pytest.approx(-0.20)
+        assert R.tail_metrics(r)["Max_Drawdown"] == pytest.approx(-0.20)
+
+    def test_calmar_defined_when_only_day_one_loses(self):
+        r = pd.Series([-0.20, 0.05, 0.05])
+        expected = M.annualize_return(r) / 0.20
+        assert M.calmar_ratio(r) == pytest.approx(expected)
+
+    def test_wealth_index_starts_at_one(self):
+        w = M.wealth_index(pd.Series([0.10, -0.10]))
+        assert list(w.round(10)) == [1.0, 1.1, 0.99]
+
+
+class TestOneDefinitionAcrossPanels:
+    def test_risk_panel_sortino_equals_analytics_sortino(self):
+        rng = np.random.default_rng(1)
+        x = pd.Series(rng.normal(0.001, 0.03, 365))
+        # Previously -1.78 (Risk) vs -1.90 (Analytics) for the same series.
+        assert R.tail_metrics(x)["Sortino"] == pytest.approx(M.sortino_ratio(x))
+        assert R.tail_metrics(x, rf_annual=0.041)["Sortino"] == pytest.approx(
+            M.sortino_ratio(x, rf_annual=0.041)
+        )
+        assert R.tail_metrics(x)["Calmar"] == pytest.approx(M.calmar_ratio(x))
+
+    def test_risk_free_rate_reaches_the_tail_sortino(self):
+        rng = np.random.default_rng(2)
+        dates = pd.date_range("2026-01-01", periods=200, freq="D")
+        btc = rng.normal(0.001, 0.03, 200)
+        df = pd.DataFrame({"BTC": btc, "ETH": btc * 1.2 + rng.normal(0, 0.01, 200)}, index=dates)
+        w = pd.Series({"BTC": 0.5, "ETH": 0.5})
+        zero = R.compute_portfolio_risk(w, df, rf_annual=0.0).tail["Sortino"]
+        rf = R.compute_portfolio_risk(w, df, rf_annual=0.041).tail["Sortino"]
+        assert rf < zero  # the parameter used to be accepted and ignored
