@@ -101,4 +101,5 @@ def test_book_totals_feed_the_header() -> None:
     assert out["unrealized"] == pytest.approx(1_000.0)
     assert out["holdings"] == 1
     assert out["cash_pct"] == pytest.approx(1500 / 9500)
+    assert out["cash_balances"] == {"USD": 1000.0, "USDC": 500.0}  # signal sizing cap
     assert book_totals([], {}, {})["cash_pct"] is None

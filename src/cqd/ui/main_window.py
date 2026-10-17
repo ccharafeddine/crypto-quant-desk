@@ -207,6 +207,7 @@ class MainWindow(QMainWindow):
         hub.changed.connect(self.header.set_state)
         hub.update(is_demo=self._is_demo)
         self.positions_panel.book_updated.connect(lambda d: hub.update(**d))
+        self.positions_panel.book_updated.connect(self._on_book_balances)
         self.performance_panel.performance_updated.connect(self._on_performance)
         self.risk_panel.risk_updated.connect(self._on_risk)
 
@@ -474,6 +475,7 @@ class MainWindow(QMainWindow):
         track record. Advisory only - it can only pre-fill the ticket."""
         self.signals_service = SignalsService(
             equity_provider=store.get_strategy_account_equity,
+            free_quote_provider=self._free_quote,
             track_log=TrackRecordLog(),
             parent=self,
         )
@@ -483,6 +485,18 @@ class MainWindow(QMainWindow):
         self.signals_panel.refresh_requested.connect(self.signals_service.refresh)
         if store.get_strategy_enabled():
             self.signals_service.start()
+
+    def _on_book_balances(self, totals: dict) -> None:
+        self._cash_balances = dict(totals.get("cash_balances") or {})
+
+    def _free_quote(self, quote: str) -> float | None:
+        """The held balance of `quote` (USD also answers to ZUSD), or None
+        before the positions panel has loaded - unknown is not zero."""
+        balances = getattr(self, "_cash_balances", None)
+        if not balances:
+            return None
+        aliases = {quote, "Z" + quote} if quote == "USD" else {quote}
+        return sum(float(balances.get(a, 0.0)) for a in aliases)
 
     def _on_signal_update(self, setup, features, fill, verdict) -> None:
         self.signals_panel.on_setup_update(setup, features, fill, verdict)

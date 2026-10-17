@@ -224,9 +224,7 @@ def christoffersen_independence(hits: np.ndarray) -> tuple[float, float]:
     p11 = n11 / (n10 + n11) if (n10 + n11) else 0.0
     p = (n01 + n11) / (n00 + n01 + n10 + n11)
     ll0 = _xlogy(n00 + n10, 1.0 - p) + _xlogy(n01 + n11, p)
-    ll1 = (
-        _xlogy(n00, 1.0 - p01) + _xlogy(n01, p01) + _xlogy(n10, 1.0 - p11) + _xlogy(n11, p11)
-    )
+    ll1 = _xlogy(n00, 1.0 - p01) + _xlogy(n01, p01) + _xlogy(n10, 1.0 - p11) + _xlogy(n11, p11)
     lr = max(0.0, -2.0 * (ll0 - ll1))
     return lr, _chi2_sf(lr, 1)
 

@@ -99,6 +99,7 @@ def evaluate_snapshot(
     prev_imbalance: float | None = None,
     start_of_day_equity: float | None = None,
     starting_equity: float | None = None,
+    free_quote: float | None = None,
 ) -> SignalsSnapshot:
     """Pure: bars + book -> setup, book features, fill estimate, timing verdict.
 
@@ -117,6 +118,7 @@ def evaluate_snapshot(
             pair_spec,
             start_of_day_equity=start_of_day_equity,
             starting_equity=starting_equity,
+            free_quote=free_quote,
         )
         if pair_spec is not None
         else None
@@ -167,6 +169,7 @@ class SignalsService(QObject):
         self,
         *,
         equity_provider: Callable[[], float],
+        free_quote_provider: Callable[[str], float | None] | None = None,
         params_provider: Callable[[], StrategyParams] = build_strategy_params,
         spec_provider: Callable[[Symbol], Awaitable[PairSpec | None]] = _default_spec_provider,
         client_factory: Callable[[], object] = make_client,
@@ -179,6 +182,7 @@ class SignalsService(QObject):
     ) -> None:
         super().__init__(parent)
         self._equity_provider = equity_provider
+        self._free_quote_provider = free_quote_provider
         self._params_provider = params_provider
         self._spec_provider = spec_provider
         self._client_factory = client_factory
@@ -283,6 +287,11 @@ class SignalsService(QObject):
             equity,
             spec,
             prev_imbalance=prev,
+            free_quote=(
+                self._free_quote_provider(symbol.quote)
+                if self._free_quote_provider is not None
+                else None
+            ),
         )
         if snapshot.imbalance is not None:
             self._flow.append(snapshot.imbalance)

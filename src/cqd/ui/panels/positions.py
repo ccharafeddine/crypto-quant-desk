@@ -233,6 +233,8 @@ def book_totals(
         "unrealized": unreal,
         "holdings": sum(1 for asset, _ in rows if asset not in CASH_ASSETS),
         "cash_pct": (cash / nav) if nav > 0 else None,
+        # Quote balances by asset, for the signal sizer's free-balance cap.
+        "cash_balances": {asset: qty for asset, qty in rows if asset in CASH_ASSETS},
     }
 
 

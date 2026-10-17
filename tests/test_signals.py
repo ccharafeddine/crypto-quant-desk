@@ -132,6 +132,33 @@ def test_evaluate_setup_respects_leverage_cap() -> None:
     assert setup.size_quote <= MAX_LEVERAGE * equity + 1e-6
 
 
+def test_leverage_cap_is_reported() -> None:
+    params = StrategyParams(
+        fast=2, slow=3, trend=5, atr_len=2, atr_mult=2.0, risk_pct=0.95, variant="ma_cross"
+    )
+    setup = evaluate_setup(_candles(UPTREND), params, equity_quote=10_000.0, pair_spec=SPEC)
+    assert setup.capped_by == "leverage"
+
+
+def test_size_is_capped_at_the_free_quote_balance() -> None:
+    from cqd.engine.signals import BALANCE_COST_BUFFER
+
+    free = evaluate_setup(_candles(UPTREND), PARAMS, 10_000.0, SPEC)
+    assert free is not None and free.capped_by == "risk"
+    # Plenty of cash: the risk budget still binds and nothing changes.
+    rich = evaluate_setup(_candles(UPTREND), PARAMS, 10_000.0, SPEC, free_quote=1e9)
+    assert rich.size_base == free.size_base and rich.capped_by == "risk"
+    # Only $50 of USD on hand: the buy (plus fee headroom) must fit inside it.
+    poor = evaluate_setup(_candles(UPTREND), PARAMS, 10_000.0, SPEC, free_quote=50.0)
+    assert poor is not None and poor.capped_by == "balance"
+    assert poor.size_quote * (1 + BALANCE_COST_BUFFER) <= 50.0 + 1e-9
+    assert poor.risk_quote < free.risk_quote
+
+
+def test_no_free_balance_fails_closed() -> None:
+    assert evaluate_setup(_candles(UPTREND), PARAMS, 10_000.0, SPEC, free_quote=0.0) is None
+
+
 # --- sizing property: realized risk never exceeds budget (+ one tick) ---
 
 

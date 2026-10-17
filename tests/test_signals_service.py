@@ -334,3 +334,20 @@ def test_service_resumes_a_pending_setup_after_restart_and_symbol_switch(tmp_pat
     asyncio.run(fresh.refresh_once(BTC))
     assert [r.outcome for r in log.read()] == ["loss"]
     assert fresh._pending is None and log.load_pending(BTC.display) is None
+
+
+def test_service_caps_size_at_the_free_quote_balance() -> None:
+    asked: list[str] = []
+
+    def free(quote: str) -> float:
+        asked.append(quote)
+        return 5.0
+
+    svc = _service(_FakeClient(_candles(UPTREND), _book()), free_quote_provider=free)
+    svc._symbol = BTC
+    got = []
+    svc.setup_updated.connect(lambda *a: got.append(a))
+    asyncio.run(svc.refresh_once(BTC))
+    setup = got[0][0]
+    assert asked == ["USD"]
+    assert setup is not None and setup.capped_by == "balance" and setup.size_quote <= 5.0

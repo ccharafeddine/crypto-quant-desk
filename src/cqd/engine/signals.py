@@ -37,6 +37,9 @@ from cqd.engine.indicators import atr, donchian, sma
 
 # --- strategy-level constants (not pair-specific) ---
 MAX_LEVERAGE = 5.0  # BTC/ETH spot cap; notional never exceeds 5x equity
+# Headroom kept back from the free balance for the taker fee and slippage, so
+# a balance-capped buy still clears (paper: 40 bps fee + 5 bps slippage).
+BALANCE_COST_BUFFER = 0.005
 DAILY_LIMIT = 0.03  # prop firm daily loss limit (3% of start-of-day equity)
 TOTAL_LIMIT = 0.05  # prop firm total loss limit (5% of starting equity)
 TARGET_MULTIPLES: tuple[float, ...] = (1.0, 2.0, 3.0)  # take-profits at 1R/2R/3R
@@ -110,6 +113,9 @@ class TradeSetup(BaseModel):
     created_ts: int
     daily_room: float | None = None
     total_room: float | None = None
+    # What bound the size: the risk budget, the leverage ceiling, or the free
+    # quote balance (spot cannot buy with money it does not hold).
+    capped_by: Literal["risk", "leverage", "balance"] = "risk"
 
 
 class PairSpec(BaseModel):
@@ -234,6 +240,7 @@ def evaluate_setup(
     *,
     start_of_day_equity: float | None = None,
     starting_equity: float | None = None,
+    free_quote: float | None = None,
 ) -> TradeSetup | None:
     """Build a sized long `TradeSetup` for the latest bar, or `None`.
 
@@ -245,7 +252,10 @@ def evaluate_setup(
       entry_ref  = last closed close (both variants; the backtest fills at the
                    NEXT bar's open)
       stop       = entry_ref - atr_mult * ATR          (rounded to price prec.)
-      size_base  = floor( min(risk_size, leverage_cap_size), lot_prec )
+      size_base  = floor( min(risk_size, leverage_cap_size, balance_cap), lot_prec )
+
+    `free_quote`, when known, is the quote currency actually available; the
+    size is capped so the buy plus `BALANCE_COST_BUFFER` fits inside it.
       risk_quote = size_base * (entry_ref - stop)      (<= risk_pct * equity)
 
     `start_of_day_equity` / `starting_equity`, when supplied, set the advisory
@@ -280,7 +290,11 @@ def evaluate_setup(
     risk_target = params.risk_pct * equity_quote
     size_risk = risk_target / risk_per_unit
     size_cap = (MAX_LEVERAGE * equity_quote) / entry_ref  # 5:1 leverage ceiling
-    size_base = _floor_to(min(size_risk, size_cap), lot_dec)
+    caps = {"risk": size_risk, "leverage": size_cap}
+    if free_quote is not None:
+        caps["balance"] = max(0.0, free_quote) / (entry_ref * (1.0 + BALANCE_COST_BUFFER))
+    capped_by = min(caps, key=lambda k: (caps[k], k != "risk"))
+    size_base = _floor_to(caps[capped_by], lot_dec)
     if size_base <= 0 or (pair_spec.ordermin and size_base < pair_spec.ordermin):
         return None  # fail closed: cannot size within the risk budget above min
 
@@ -320,10 +334,12 @@ def evaluate_setup(
         created_ts=int(candles[-1].time),
         daily_room=daily_room,
         total_room=total_room,
+        capped_by=capped_by,
     )
 
 
 __all__ = [
+    "BALANCE_COST_BUFFER",
     "DAILY_LIMIT",
     "MAX_LEVERAGE",
     "TARGET_MULTIPLES",
