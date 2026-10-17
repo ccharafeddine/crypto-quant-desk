@@ -434,7 +434,27 @@ Last session: 2026-07-10
   fail closed), token-only submit, the private-endpoint allowlist (no withdrawals),
   no signal->order path, no keys in audit, prop limits and paper costs.
 - Deferred: pending signal persisted across restarts; >720 bars of history; sizing
-  capped at free balance.
+  capped at free balance. (Pending + balance cap done in Phase 3.)
+
+## Phase 2 - Graphite redesign (branch phase2-redesign, 2026-10-16)
+- Graphite theme (bg #0E1114, amber #F59E0B), bundled Inter + JetBrains Mono, amber logo.
+- Six pages from a nav rail with a header + KPI strip; Portfolio overview (TWR vs BTC).
+- Signals card redesign; costed replay with frictionless twin and bootstrap CI.
+- Demo client gained get_depth (signals ran empty in demo); lazy panels load on first show.
+
+## Phase 3 - analytics (branch phase3-analytics, 2026-10-16)
+- engine/var.py (4 VaR models, ES 97.5%, Kupiec/Christoffersen backtests), engine/stress.py
+  (crash replays from Kraken trades, depeg, downside beta, bootstrap fan, liquidity),
+  engine/attribution.py, engine/tax_lots.py, backtest.parameter_stability.
+- Risk lab panel on the Risk page; KPI tail figure is historical ES 97.5%.
+- Done from the Phase 1 deferrals: pending signals persist (signals-pending.json), sizing
+  capped at free balance, live signal P&L net of costs, order cap + mode re-checked at send.
+
+## Phase 4 - polish (branch phase4-polish, 2026-10-16)
+- CI on Windows + macOS x Python 3.12/3.13 from uv.lock; requirements-lock.txt for pip.
+- Author Chafic Charafeddine (pyproject, LICENSE); README rewritten; site-kit/ (logo,
+  cards, screenshots png+webp, captions.json, detail.md) built by scripts/build_site_kit.py
+  from scripts/capture_screenshots.py output.
 
 ## Next (all need the owner's machines)
 - Expansion v2.2 verification on the owner's machine: enable Settings > Strategy, pick a
