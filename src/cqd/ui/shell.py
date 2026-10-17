@@ -72,6 +72,7 @@ NAV_SPEC: tuple[tuple[str, tuple[NavItem, ...]], ...] = (
         (
             NavItem("Risk & stress", "Risk", "risk"),
             NavItem("Analytics", "Risk", "analytics"),
+            NavItem("Risk lab", "Risk", "lab"),
             NavItem("Alerts", "Risk", "alerts"),
         ),
     ),

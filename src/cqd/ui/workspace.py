@@ -47,6 +47,7 @@ PANEL_KEYS: tuple[str, ...] = (
     "analyst",
     "analytics",
     "signals",
+    "lab",
 )
 
 DEFAULT_PERSPECTIVE = "Portfolio"
@@ -92,6 +93,7 @@ LAYOUTS: dict[str, list[tuple[str, object, str | None]]] = {
     "Risk": [
         ("risk", _C, None),
         ("analytics", _R, "risk"),
+        ("lab", _C, "analytics"),
         ("alerts", _B, "risk"),
     ],
     "Insight": [

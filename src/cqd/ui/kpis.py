@@ -50,7 +50,7 @@ class KpiState:
     btc_beta: float | None = None
     var95: float | None = None  # loss fraction of NAV (negative)
     es: float | None = None  # expected shortfall, loss fraction of NAV
-    es_level: str = "95%"
+    es_level: str = "97.5%"
     max_drawdown: float | None = None
     underwater_days: int | None = None
     is_demo: bool = False

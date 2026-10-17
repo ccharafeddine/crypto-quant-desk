@@ -31,6 +31,7 @@ from cqd.alerts.notify import send_toast
 from cqd.ui.panels.alerts import AlertsPanel
 from cqd.ui.panels.analyst import AnalystPanel
 from cqd.ui.panels.analytics import AnalyticsPanel
+from cqd.ui.panels.risk_lab import RiskLabPanel, es_975
 from cqd.ui.panels.book import BookPanel
 from cqd.ui.panels.chart import ChartPanel
 from cqd.ui.panels.orders import OrdersPanel
@@ -120,6 +121,7 @@ class MainWindow(QMainWindow):
         self.book_panel = BookPanel(self)
         self.tape_panel = TapePanel(self)
         self.analytics_panel = AnalyticsPanel(self)
+        self.lab_panel = RiskLabPanel(self)
         self.signals_panel = SignalsPanel(self)
 
         # The shell: nav rail | (page title, KPI strip, QtAds cards).
@@ -163,6 +165,7 @@ class MainWindow(QMainWindow):
         self.workspace.add_panel("analyst", "Analyst", self.analyst_panel)
         self.workspace.add_panel("analytics", "Analytics", self.analytics_panel)
         self.workspace.add_panel("signals", "Signals & backtest", self.signals_panel)
+        self.workspace.add_panel("lab", "Risk lab", self.lab_panel)
         self.workspace.ensure_presets(self._settings)
         self.workspace.restore_state(self._settings)
         # Theme the QtAds chrome now that the manager exists (the __init__
@@ -232,8 +235,8 @@ class MainWindow(QMainWindow):
             ewma_vol=r.ewma_vol,
             btc_beta=r.book_beta_btc,
             var95=tail.get("VaR_95"),
-            es=tail.get("CVaR_95"),
-            es_level="95%",
+            es=es_975(ar),
+            es_level="97.5%",
         )
 
     def _on_symbol(self, symbol) -> None:
