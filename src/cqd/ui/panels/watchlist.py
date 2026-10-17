@@ -154,7 +154,10 @@ class WatchlistPanel(Panel):
                 sparks: dict[str, list[float]] = {}
                 for t in tickers:
                     try:
-                        closes = await client.get_ohlc_closes(to_ws_pair(t.symbol), interval=60)
+                        # Display-only sparkline: include the live bar.
+                        closes = await client.get_ohlc_closes(
+                            to_ws_pair(t.symbol), interval=60, closed_only=False
+                        )
                         sparks[t.symbol] = [c for _ts, c in closes][-24:]
                     except KrakenError:
                         sparks[t.symbol] = []

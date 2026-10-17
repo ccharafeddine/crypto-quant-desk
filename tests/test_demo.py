@@ -77,14 +77,16 @@ def test_get_ohlc_delegates_unchanged() -> None:
     d = _demo()
     seen = {}
 
-    async def fake_ohlc(pair, *, interval=1440, since=None):
+    async def fake_ohlc(pair, *, interval=1440, since=None, closed_only=True):
         seen["args"] = (pair, interval, since)
+        seen["closed_only"] = closed_only
         return [(1, 2.0), (2, 3.0)]
 
     d._client.get_ohlc_closes = fake_ohlc
     out = asyncio.run(d.get_ohlc_closes("ADAUSD", interval=1440))
     assert out == [(1, 2.0), (2, 3.0)]
     assert seen["args"] == ("ADAUSD", 1440, None)
+    assert seen["closed_only"] is True  # stats path never sees the forming bar
 
 
 # ---------- drop-in proof: compute_account_risk with a DemoClient ----------
@@ -104,7 +106,7 @@ def test_dropin_compute_account_risk() -> None:
         # Map friendly "{bare}USD" -> slash and return only requested marks.
         return {f"{p[:-3]}/USD": marks[f"{p[:-3]}/USD"] for p in pairs}
 
-    async def fake_ohlc(pair, *, interval=1440, since=None):
+    async def fake_ohlc(pair, *, interval=1440, since=None, closed_only=True):
         # Vary the series per pair so cov/beta are well-defined.
         base = float(len(pair)) + 10.0
         return _ramp(base, step=0.01 + 0.002 * (len(pair) % 3))

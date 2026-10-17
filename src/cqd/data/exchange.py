@@ -196,20 +196,32 @@ class KrakenClient:
             return out
 
     async def get_ohlc_closes(
-        self, pair: str, *, interval: int = 1440, since: int | None = None
+        self,
+        pair: str,
+        *,
+        interval: int = 1440,
+        since: int | None = None,
+        closed_only: bool = True,
     ) -> list[tuple[int, float]]:
         args = ["ohlc", pair, "--interval", str(interval)]
         if since is not None:
             args += ["--since", str(since)]
         raw = await self._run(args, private=False)
-        return normalize_ohlc(raw)
+        return normalize_ohlc(raw, closed_only=closed_only)
 
-    async def get_ohlc(self, pair: str, *, interval: int = 1440, since: int | None = None):
+    async def get_ohlc(
+        self,
+        pair: str,
+        *,
+        interval: int = 1440,
+        since: int | None = None,
+        closed_only: bool = True,
+    ):
         args = ["ohlc", pair, "--interval", str(interval)]
         if since is not None:
             args += ["--since", str(since)]
         raw = await self._run(args, private=False)
-        return normalize_ohlc_full(raw)
+        return normalize_ohlc_full(raw, closed_only=closed_only)
 
     async def get_trades(
         self, *, start: int | None = None, end: int | None = None

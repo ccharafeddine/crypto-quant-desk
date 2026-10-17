@@ -217,7 +217,8 @@ class ChartPanel(Panel):
         gen = self._begin_load()
         try:
             async with KrakenRESTClient(api_key="", api_secret="") as client:
-                candles = await client.get_ohlc(pair, interval=interval)
+                # The chart is the one consumer that draws the forming bar.
+                candles = await client.get_ohlc(pair, interval=interval, closed_only=False)
         except KrakenError as e:
             if self._is_current(gen):
                 self.status.error(f"Chart unavailable: {e}")

@@ -117,7 +117,7 @@ def test_normalize_ohlc_shape_and_close_index() -> None:
 
 def test_normalize_ohlc_ascending() -> None:
     # Feed rows out of order; expect ascending by time.
-    scrambled = {"XXBTZUSD": list(reversed(OHLC_RAW["XXBTZUSD"])), "last": 1}
+    scrambled = {"XXBTZUSD": list(reversed(OHLC_RAW["XXBTZUSD"])), "last": OHLC_RAW["last"]}
     out = normalize_ohlc(scrambled)
     times = [t for t, _ in out]
     assert times == sorted(times)
@@ -141,7 +141,7 @@ def test_normalize_ohlc_full_maps_ohlcv_and_drops_vwap_count() -> None:
 
 
 def test_normalize_ohlc_full_is_ascending() -> None:
-    scrambled = {"XXBTZUSD": list(reversed(OHLC_RAW["XXBTZUSD"])), "last": 1}
+    scrambled = {"XXBTZUSD": list(reversed(OHLC_RAW["XXBTZUSD"])), "last": OHLC_RAW["last"]}
     out = normalize_ohlc_full(scrambled)
     times = [c.time for c in out]
     assert times == sorted(times)
@@ -149,6 +149,34 @@ def test_normalize_ohlc_full_is_ascending() -> None:
 
 def test_normalize_ohlc_full_empty_response() -> None:
     assert normalize_ohlc_full({"last": 0}) == []
+
+
+# Kraken's array ends with the still-forming candle; `last` is the newest
+# COMMITTED open time (observed live 2026-10-16: last row 17 Oct 00:00 UTC,
+# last=16 Oct 00:00 UTC). Stats and signals must never see the forming bar.
+FORMING_RAW = {
+    "XXBTZUSD": [
+        [1718150400, "1", "2", "0.5", "10.0", "1", "1", 1],
+        [1718236800, "1", "2", "0.5", "11.0", "1", "1", 1],
+        [1718323200, "1", "2", "0.5", "12.0", "1", "1", 1],  # forming
+    ],
+    "last": 1718236800,
+}
+
+
+def test_normalize_ohlc_drops_forming_candle_by_default() -> None:
+    assert [t for t, _ in normalize_ohlc(FORMING_RAW)] == [1718150400, 1718236800]
+    assert [c.time for c in normalize_ohlc_full(FORMING_RAW)] == [1718150400, 1718236800]
+
+
+def test_normalize_ohlc_keeps_forming_candle_when_asked() -> None:
+    assert len(normalize_ohlc(FORMING_RAW, closed_only=False)) == 3
+    assert normalize_ohlc_full(FORMING_RAW, closed_only=False)[-1].close == 12.0
+
+
+def test_normalize_ohlc_without_cursor_drops_nothing() -> None:
+    raw = {"XXBTZUSD": FORMING_RAW["XXBTZUSD"]}
+    assert len(normalize_ohlc(raw)) == 3
 
 
 # ---------- Balance ----------

@@ -111,14 +111,17 @@ def test_get_ohlc_closes() -> None:
     rows = [
         [1718150400, "1", "2", "0.5", "68233.7", "1.5", "10", 5],
         [1718236800, "1", "2", "0.5", "66000.0", "1.5", "10", 5],
+        [1718323200, "1", "2", "0.5", "65000.0", "1.5", "10", 5],  # forming bar
     ]
 
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.url.params["interval"] == "1440"
-        return httpx.Response(200, json=_envelope({"XXBTZUSD": rows, "last": 999}))
+        return httpx.Response(200, json=_envelope({"XXBTZUSD": rows, "last": 1718236800}))
 
     out = asyncio.run(_client(handler).get_ohlc_closes("BTCUSD"))
     assert out == [(1718150400, 68233.7), (1718236800, 66000.0)]
+    live = asyncio.run(_client(handler).get_ohlc_closes("BTCUSD", closed_only=False))
+    assert live[-1] == (1718323200, 65000.0)
 
 
 def test_get_depth_normalized() -> None:

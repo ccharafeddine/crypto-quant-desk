@@ -180,12 +180,28 @@ class DemoClient:
         return await self._client.get_marks(pairs)
 
     async def get_ohlc_closes(
-        self, pair: str, *, interval: int = 1440, since: int | None = None
+        self,
+        pair: str,
+        *,
+        interval: int = 1440,
+        since: int | None = None,
+        closed_only: bool = True,
     ) -> list[tuple[int, float]]:
-        return await self._client.get_ohlc_closes(pair, interval=interval, since=since)
+        return await self._client.get_ohlc_closes(
+            pair, interval=interval, since=since, closed_only=closed_only
+        )
 
-    async def get_ohlc(self, pair: str, *, interval: int = 1440, since: int | None = None):
-        return await self._client.get_ohlc(pair, interval=interval, since=since)
+    async def get_ohlc(
+        self,
+        pair: str,
+        *,
+        interval: int = 1440,
+        since: int | None = None,
+        closed_only: bool = True,
+    ):
+        return await self._client.get_ohlc(
+            pair, interval=interval, since=since, closed_only=closed_only
+        )
 
     async def get_tickers(self, pairs: list[str]):
         return await self._client.get_tickers(pairs)

@@ -300,16 +300,26 @@ class KrakenRESTClient:
             return out
 
     async def get_ohlc_closes(
-        self, pair: str, *, interval: int = 1440, since: int | None = None
+        self,
+        pair: str,
+        *,
+        interval: int = 1440,
+        since: int | None = None,
+        closed_only: bool = True,
     ) -> list[tuple[int, float]]:
         params: dict[str, Any] = {"pair": pair, "interval": interval}
         if since is not None:
             params["since"] = since
         raw = await self._public("OHLC", params)
-        return normalize_ohlc(raw)
+        return normalize_ohlc(raw, closed_only=closed_only)
 
     async def get_ohlc(
-        self, pair: str, *, interval: int = 1440, since: int | None = None
+        self,
+        pair: str,
+        *,
+        interval: int = 1440,
+        since: int | None = None,
+        closed_only: bool = True,
     ) -> list[Candle]:
         """Full OHLCV candles for the candlestick chart (vs the closes-only
         `get_ohlc_closes` the returns/risk math uses)."""
@@ -317,7 +327,7 @@ class KrakenRESTClient:
         if since is not None:
             params["since"] = since
         raw = await self._public("OHLC", params)
-        return normalize_ohlc_full(raw)
+        return normalize_ohlc_full(raw, closed_only=closed_only)
 
     async def get_depth(
         self, pair: str, *, count: int = 25

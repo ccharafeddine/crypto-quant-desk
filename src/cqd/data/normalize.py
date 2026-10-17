@@ -203,18 +203,47 @@ def _ohlc_rows(raw: dict[str, Any]) -> list[list[Any]]:
     return []
 
 
-def normalize_ohlc(raw: dict[str, Any]) -> list[tuple[int, float]]:
+def _committed_cutoff(raw: dict[str, Any]) -> int | None:
+    """Open time of the newest COMMITTED candle, from Kraken's `last` cursor.
+
+    Kraken's OHLC array always ends with the current, still-forming candle; its
+    `last` field is the open time of the newest committed one. Statistics and
+    signals must never see the forming bar (its close changes until the bar
+    ends, so returns would include a partial day and signals would repaint).
+    Returns `None` when the cursor is absent or unparseable, in which case no
+    row is dropped (fail open on display data, never invent a cutoff).
+    """
+    last = raw.get("last")
+    try:
+        return int(last) if last is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _rows(raw: dict[str, Any], closed_only: bool) -> list[list[Any]]:
+    rows = _ohlc_rows(raw)
+    cutoff = _committed_cutoff(raw) if closed_only else None
+    if cutoff is None:
+        return rows
+    return [row for row in rows if int(row[0]) <= cutoff]
+
+
+def normalize_ohlc(raw: dict[str, Any], *, closed_only: bool = True) -> list[tuple[int, float]]:
     """OHLC response -> ascending list of (time:int, close:float) for the pair.
 
     Keeps only time and close (index 4); DataFrame assembly is a later step.
+    `closed_only` (default) drops the forming candle (see `_committed_cutoff`).
     """
-    out = [(int(row[0]), float(row[4])) for row in _ohlc_rows(raw)]
+    out = [(int(row[0]), float(row[4])) for row in _rows(raw, closed_only)]
     out.sort(key=lambda r: r[0])
     return out
 
 
-def normalize_ohlc_full(raw: dict[str, Any]) -> list[Candle]:
+def normalize_ohlc_full(raw: dict[str, Any], *, closed_only: bool = True) -> list[Candle]:
     """OHLC response -> ascending list of `Candle` (full OHLCV for candlesticks).
+
+    `closed_only` (default) drops the forming candle; only the chart asks for it
+    (`closed_only=False`) so it can draw the live bar.
 
     Kraken row layout is [time, open, high, low, close, vwap, volume, count];
     we keep O/H/L/C (1-4) and volume (6), dropping vwap and trade count.
@@ -228,7 +257,7 @@ def normalize_ohlc_full(raw: dict[str, Any]) -> list[Candle]:
             float(row[4]),
             float(row[6]),
         )
-        for row in _ohlc_rows(raw)
+        for row in _rows(raw, closed_only)
     ]
     out.sort(key=lambda c: c.time)
     return out
