@@ -1,12 +1,13 @@
 # APP_FLOW.md — Crypto Quant Desk v2
 
-Desktop Qt app: "screens" are adjustable card panels inside one workspace (Qt Advanced Docking System over a `QMainWindow`), plus modal dialogs. Every panel can be dragged, split, tab-stacked, floated, resized, hidden, and reopened; layouts save/restore as named perspectives (FL-W1). No URL routes; identifiers below are the canonical names used in code (`ui/panels/*`, `ui/dialogs/*`).
+Desktop Qt app: "screens" are adjustable card panels inside one workspace (Qt Advanced Docking System over a `QMainWindow`), plus modal dialogs. Every panel can be dragged, split, tab-stacked, floated, resized, hidden, and reopened; a left nav rail switches between six pages (Portfolio, Markets, Trading, Signals, Risk, Insight), each a saved arrangement of its own cards (FL-W1). No URL routes; identifiers below are the canonical names used in code (`ui/panels/*`, `ui/dialogs/*`).
 
 ## Screen inventory
 
 | ID | Kind | Module | Purpose |
 |---|---|---|---|
-| `main_window` | window | `ui/main_window.py` | Shell: menu bar, status bar, QtAds workspace host, perspectives |
+| `main_window` | window | `ui/main_window.py` | Shell: menu bar, nav rail, header + KPI strip, status bar, QtAds workspace host, pages |
+| `overview_panel` | dock panel | `ui/panels/overview.py` (Graphite) | Portfolio home: TWR vs BTC buy-and-hold with flow markers (1M/3M/1Y/All), risk at a glance, per-asset risk contribution bars |
 | `watchlist_panel` | dock panel | `ui/panels/watchlist.py` (new, E3) | Markets: price, 24h %, volume, sparkline; selection sets the active symbol |
 | `positions_panel` | dock panel | `ui/panels/positions.py` | Holdings, marks, USD value, cost basis, break-even, unrealized PnL, Close action |
 | `risk_panel` | dock panel | `ui/panels/risk.py` | Vol, EWMA vol, BTC beta, HHI, effective bets, risk contribution, tail metrics + footnotes |
@@ -23,9 +24,9 @@ Desktop Qt app: "screens" are adjustable card panels inside one workspace (Qt Ad
 | `order_confirm_dialog` | modal | `ui/dialogs/order_confirm.py` (new) | Order summary + confirm/cancel |
 | `first_run_dialog` | modal | `ui/dialogs/first_run.py` (new) | Welcome: connect keys or continue in demo |
 
-Status bar (always visible): connection state (`LIVE ● / DELAYED ● / OFFLINE ●`), mode badge (`PAPER` amber / `LIVE` red), data source (`REST / DEMO`), last-update clock.
+Header strip (always visible): logo, account context, active symbol, NAV and day P&L, EXAMPLE DATA badge in demo, mode badge (`PAPER` / `LIVE`), stream state, Refresh, primary New order. KPI strip below it (`ui/kpis.py`, fed by the positions, performance and risk panels). Status bar: data source, statistics conventions, last tick and stream state.
 
-Menus: **File** (Settings, Disconnect account, Exit) · **View** (panel visibility toggles, Perspectives submenu [Trading/Analysis/Monitor + Save/Delete], Reset layout, Theme submenu) · **Trading** (Paper mode toggle, Cancel all orders) · **Help** (About, Open audit log folder).
+Menus: **File** (Settings, Disconnect account, Exit) · **View** (panel visibility toggles, Pages submenu [Portfolio/Markets/Trading/Signals/Risk/Insight], Perspectives submenu [Save/Delete custom], Reset layout, Theme submenu) · **Trading** (Paper mode toggle, Cancel all orders) · **Help** (About, Open audit log folder).
 
 ## Flows
 
@@ -100,8 +101,8 @@ Exit → if live orders were placed this session, no special handling (orders li
 1. User drags a panel's title bar → QtAds shows drop zones (edges + center tab targets) → release docks/splits/tabs it; drag beyond the window floats it as its own top-level window.
 2. Drag a splitter between panels → both resize live (width and height); double-click a title bar toggles float.
 3. View > panel name → hides/shows that panel; a closed panel keeps its state and re-docks to its last position (or default if none).
-4. View > Perspectives > {Trading, Analysis, Monitor} → applies a saved arrangement live. "Save perspective…" stores the current arrangement under a name; "Delete" removes a custom one (presets are not deletable).
-5. View > Reset layout → confirm → restores the default arrangement.
+4. Nav rail item (or View > Pages > page) → shows that page: the current page's arrangement is saved first, then the target page opens with only its cards and the clicked card in front. "Save perspective…" stores the current arrangement under a custom name; "Delete" removes a custom one (pages are not deletable).
+5. View > Reset layout → confirm → rebuilds every page from its spec and opens Portfolio.
 6. On exit the current arrangement is saved to QSettings; on next launch it restores. A saved layout that fails to deserialize (version/panel mismatch) silently falls back to the default; the app never fails to open because of a bad layout.
 
 ### FL-W2 Select the active symbol

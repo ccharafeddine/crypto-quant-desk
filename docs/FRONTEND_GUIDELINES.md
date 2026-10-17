@@ -58,8 +58,8 @@ Size scale (pt): app title 14 semibold · panel title 11 semibold · table heade
 
 Desktop-only; "responsive" = dock behavior, not breakpoints. The workspace host is the **Qt Advanced Docking System** (`PySide6-QtAds`), not raw QDockWidgets.
 - Every panel is a `CDockWidget`: drag to split, tab-stack, float as a top-level window, resize freely (width and height), hide, and reopen. This is the F10 adjustable workspace.
-- Default arrangement ≈ Watchlist (left) · Chart above Order book (center) · Ticket above Depth (right) · Holdings + Analytics (bottom, tabbed). Ships as the "Trading" perspective.
-- **Perspectives**: named layouts saved to QSettings — presets "Trading", "Analysis", "Monitor" plus user-saved ones. **Reset layout** restores the default. Layout persists on exit / restores on launch; a layout that fails to deserialize falls back to the default (never blocks startup). Minimum window 1200×700.
+- **Pages (Graphite IA)**: a left nav rail (Portfolio, Markets, Trading, Risk, Insight sections) switches between six pages — Portfolio (overview · positions · performance), Markets (watchlist · chart · order book · time & sales), Trading (chart · order ticket · order book · open orders), Signals (signals & backtest · chart), Risk (risk & stress · analytics · alerts), Insight (analyst · analytics). Each page opens only its own cards (≤ 4); the rest stay registered but closed. Above every page: a header strip (symbol, mode badge, stream state, Refresh, primary "New order") and an eight-cell KPI strip (NAV, unrealized, realized, 1Y TWR, ann. vol, BTC beta, 1-day VaR 95%, max drawdown).
+- Each page remembers the user's arrangement as a QtAds perspective (saved on leaving the page and on exit); "Portfolio" is the default. Custom perspectives remain under View > Perspectives. **Reset layout** rebuilds every page from its spec. Layout persists on exit / restores on launch; a layout that fails to deserialize falls back to the default (never blocks startup). Minimum window 1200×700.
 - Tables get horizontal scrollbars rather than truncating numeric columns; last column stretches.
 
 ## Card chrome & workspace styling (QtAds)

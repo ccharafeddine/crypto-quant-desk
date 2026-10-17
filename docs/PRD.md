@@ -83,7 +83,7 @@ Added after F1–F9 landed. These raise the app from a fixed cockpit to a fully 
 Every section is its own card the user can resize (width and height), move, tab, float as a separate window, and close/reopen.
 - **AC10.1** Each panel is an independent dock card; the user can drag to split, tab-stack, float, and freely resize any panel. Built on the Qt Advanced Docking System.
 - **AC10.2** The full workspace layout persists to QSettings on exit and restores on launch; a corrupt/absent/incompatible saved layout falls back to the default without crashing.
-- **AC10.3** Named **perspectives** (at least "Trading", "Analysis", "Monitor") can be saved, loaded, and deleted; a **Reset layout** restores the default arrangement.
+- **AC10.3** Six **pages** (Portfolio, Markets, Trading, Signals, Risk, Insight) reached from a nav rail, each remembering its own arrangement; custom perspectives can be saved, loaded, and deleted; a **Reset layout** rebuilds every page.
 - **AC10.4** Every panel can be hidden and reopened from the View menu; closing a panel never loses its state or wiring.
 
 ### F11. Premium visual system
