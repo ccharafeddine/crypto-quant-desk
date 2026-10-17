@@ -418,11 +418,29 @@ Last session: 2026-07-10
   "narrate this setup" button yet (signals_snapshot is delivered+tested, wiring a button is
   polish); poll-interval change needs an app restart to take effect.
 
+## Phase 1 - math and correctness (branch phase1-math, 2026-10-16)
+- Kraken's forming OHLC candle is dropped from stats/signals (chart keeps it).
+- Drawdown measured from the starting value; one Sortino/Calmar for every panel.
+- Real risk-free rate (Settings > Data, default 4.1% = 3-mo T-bill) in Sharpe/Sortino.
+- Time-weighted returns (Modified Dietz): deposits/withdrawals are not performance.
+- Buy fees in cost basis; sells realize net of fees.
+- Backtest: closed-bar signals, next-open fills + slippage, fresh-trigger entries,
+  gap-through stop/target fills, paper-broker costs (40 bps taker, 5 bps), PASS on
+  the close, close-marked drawdown incl. the open trade, results in R; an anchored
+  walk-forward with out-of-sample results shown in Signals. Breakout look-ahead fill
+  bias (+0.26R/trade on a random walk) removed.
+- Live signals resolve against every closed bar after entry, gap fills at the open.
+- tests/test_safety_rails.py pins paper default, typed LIVE, the $500 cap (both modes,
+  fail closed), token-only submit, the private-endpoint allowlist (no withdrawals),
+  no signal->order path, no keys in audit, prop limits and paper costs.
+- Deferred: pending signal persisted across restarts; >720 bars of history; sizing
+  capped at free balance.
+
 ## Next (all need the owner's machines)
 - Expansion v2.2 verification on the owner's machine: enable Settings > Strategy, pick a
   pair, confirm the Signals panel shows a sized setup + timing verdict + backtest/live, and
-  that "Send to ticket" pre-fills (never submits). Reconcile walk_forward vs STRATEGY.md's
-  private data (AC3). Optional polish: analyst "narrate current setup" button; live-portfolio
+  that "Send to ticket" pre-fills (never submits). Reconcile the costed replay /
+  walk-forward vs STRATEGY.md's private data (AC3). Optional polish: analyst "narrate current setup" button; live-portfolio
   equity option; live poll-interval change without restart.
 - Windows installer: install Inno Setup 6, run ISCC on packaging\windows\installer.iss
   -> dist\installer\crypto-quant-desk-2.0.0-setup.exe. (.iss written but not yet compiled.)

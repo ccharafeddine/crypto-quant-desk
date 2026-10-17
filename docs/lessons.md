@@ -120,3 +120,13 @@ One entry per correction or debugging session. Format: date, what went wrong, th
   panels in tests is what invites the processEvents hang. Rule: put chart/panel
   logic in module-level pure functions and test those; verify the rendered
   widget visually (headless QWidget.grab screenshot), not with a qtbot smoke.
+- Backtest fill bias (Phase 1): the breakout's entry reference was the channel
+  band, BELOW the close that confirmed the break, and fills used that level. On a
+  driftless random walk (300 GBM paths x 720 bars) it earned +0.26R/trade - pure
+  look-ahead. Rule: a signal computed on bar t's close can only fill at bar t+1's
+  open (plus slippage); a gap through a stop fills at the open; and every
+  strategy change gets the random-walk check (expectancy within 3 SE of zero).
+- Kraken OHLC's last row is the still-forming candle (`result.last` is the newest
+  committed open time). Feeding it to stats/signals repaints; drop it everywhere
+  except the live chart.
+- Account returns must be time-weighted: a deposit-only account read +7,183%/yr.
