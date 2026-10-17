@@ -14,7 +14,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass, field
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QHeaderView,
     QLabel,
@@ -27,7 +27,7 @@ from cqd.data.client import make_client
 from cqd.data.errors import KrakenAuthError, KrakenError
 from cqd.data.portfolio import AccountRisk, EmptyPortfolioError, compute_account_risk
 from cqd.ui.panels.base import Panel
-from cqd.ui.widgets import Badge, PanelHeader, PanelStatus
+from cqd.ui.widgets import Badge, KeyValueGrid, PanelHeader, PanelStatus
 
 _FOOTNOTE = (
     "Ex-ante risk: CURRENT weights over the last 90 closed daily bars (the "
@@ -123,6 +123,9 @@ def build_risk_view(ar: AccountRisk, *, is_demo: bool) -> RiskView:
 class RiskPanel(Panel):
     title = "Risk"
 
+    #: The full AccountRisk after each load (overview card + KPI strip).
+    risk_updated = Signal(object)
+
     HEADERS = ["Asset", "Weight", "BTC β", "Risk %"]
 
     def __init__(self, parent=None) -> None:
@@ -131,7 +134,7 @@ class RiskPanel(Panel):
         # Header row with a small DEMO pill (left-aligned, never full width) so
         # demo data is never mistaken for the user's real account.
         header = PanelHeader("Risk")
-        self.demo_badge = Badge("DEMO")
+        self.demo_badge = Badge("EXAMPLE DATA", kind="neutral")
         self.demo_badge.setVisible(False)
         header.add_left(self.demo_badge)
         self._layout.addWidget(header)
@@ -141,9 +144,8 @@ class RiskPanel(Panel):
         self._layout.addWidget(self.value_label)
 
         # Portfolio-level metrics.
-        self.metrics_label = QLabel("")
-        self.metrics_label.setTextFormat(Qt.TextFormat.RichText)
-        self._layout.addWidget(self.metrics_label)
+        self.metrics_grid = KeyValueGrid(columns=2)
+        self._layout.addWidget(self.metrics_grid)
 
         # Per-asset table.
         self.table = QTableWidget(0, len(self.HEADERS))
@@ -192,6 +194,7 @@ class RiskPanel(Panel):
             if not self._is_current(gen):
                 return  # a newer load owns the UI now
             self._render(build_risk_view(ar, is_demo=is_demo))
+            self.risk_updated.emit(ar)
             self.status.setText("Loaded")
         except EmptyPortfolioError:
             if self._is_current(gen):
@@ -212,12 +215,10 @@ class RiskPanel(Panel):
                 self.status.error(f"Couldn't load risk. ({e})")
 
     def _render(self, view: RiskView) -> None:
-        self.value_label.setText(f"Total value: {view.total_usd_str}")
+        self.value_label.setText(f"Total value {view.total_usd_str} (USD)")
         self.demo_badge.setVisible(view.is_demo)
 
-        self.metrics_label.setText(
-            "<br>".join(f"<b>{label}:</b> {value}" for label, value in view.metrics)
-        )
+        self.metrics_grid.set_rows(view.metrics)
 
         self.table.clearContents()
         self.table.setRowCount(len(view.rows))

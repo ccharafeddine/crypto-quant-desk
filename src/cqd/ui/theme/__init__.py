@@ -114,6 +114,7 @@ QMainWindow, QWidget {
     font-family: ${font_ui};
     font-size: 13px;
 }
+QLabel { background: transparent; }
 QToolTip { background: ${elevated}; color: ${text}; border: 1px solid ${border_strong}; padding: 4px 6px; }
 
 QMenuBar {
@@ -289,6 +290,8 @@ QLineEdit, QTextEdit, QPlainTextEdit, QComboBox, QSpinBox, QDoubleSpinBox {
 QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QComboBox:focus,
 QSpinBox:focus, QDoubleSpinBox:focus { border-color: ${accent}; }
 QLineEdit:disabled { color: ${text_faint}; background-color: ${surface}; }
+/* Read-only prose (analyst narrative) reads in the UI face, not mono. */
+QTextEdit[readOnly="true"] { font-family: ${font_ui}; font-size: 13px; }
 QComboBox QAbstractItemView { background: ${elevated}; border: 1px solid ${border_strong}; }
 
 QCheckBox::indicator, QRadioButton::indicator { width: 13px; height: 13px; }
@@ -378,7 +381,7 @@ ads--CDockWidgetTab {
     border-bottom: 2px solid transparent;
     padding: 4px 10px;
 }
-ads--CDockWidgetTab[activeTab="true"] { border-bottom: 2px solid ${accent}; }
+ads--CDockWidgetTab[activeTab="true"] { background: ${surface}; border-bottom: 2px solid ${accent}; }
 ads--CDockWidgetTab QLabel {
     color: ${text_faint}; font-size: 11px; font-weight: 600;
     text-transform: uppercase; letter-spacing: 0.5px;

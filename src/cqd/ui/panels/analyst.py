@@ -44,7 +44,7 @@ class AnalystPanel(Panel):
         super().__init__(parent)
 
         header = PanelHeader("Analyst")
-        self.demo_badge = Badge("DEMO")
+        self.demo_badge = Badge("EXAMPLE DATA", kind="neutral")
         self.demo_badge.setVisible(False)
         header.add_left(self.demo_badge)
         self._layout.addWidget(header)

@@ -8,8 +8,10 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QDoubleSpinBox,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QPushButton,
@@ -49,25 +51,40 @@ class PanelHeader(QWidget):
     left-aligned; everything else is pushed away by a trailing stretch.
     """
 
-    def __init__(self, title: str, parent: QWidget | None = None) -> None:
+    def __init__(
+        self, title: str, parent: QWidget | None = None, *, show_title: bool = False
+    ) -> None:
         super().__init__(parent)
         self.setObjectName("panelHeader")
         self._lay = QHBoxLayout(self)
         self._lay.setContentsMargins(0, 0, 0, 8)
         self._lay.setSpacing(8)
-        label = QLabel(title)
-        label.setProperty("role", "panel-title")
-        self._lay.addWidget(label)
+        # The dock tab already names the card (Graphite: no "Risk" tab over a
+        # "RISK" header). The title shows only when it adds information, and
+        # the row hides itself until it carries a badge or a control.
+        self.title_label = QLabel(title)
+        self.title_label.setProperty("role", "panel-title")
+        self.title_label.setVisible(show_title)
+        self._lay.addWidget(self.title_label)
         self._lay.addStretch(1)
+        self._has_content = show_title
+        self.setVisible(show_title)
+
+    def _reveal(self) -> None:
+        if not self._has_content:
+            self._has_content = True
+            self.setVisible(True)
 
     def add_left(self, widget: QWidget) -> None:
         """Insert a widget just after the title (left-aligned, before stretch)."""
         self._lay.insertWidget(1, widget)
+        self._reveal()
 
     def add_right(self, widget: QWidget) -> None:
         """Append a widget on the right of the header (after the stretch), where
         per-panel controls live (symbol/timeframe selectors, a settings gear)."""
         self._lay.addWidget(widget)
+        self._reveal()
 
 
 class PanelStatus(QWidget):
@@ -146,3 +163,39 @@ def set_kind(widget: QWidget, prop: str, value: str) -> None:
     style = widget.style()
     style.unpolish(widget)
     style.polish(widget)
+
+
+class KeyValueGrid(QWidget):
+    """Label/value rows in `columns` column pairs: muted labels, mono values.
+
+    Replaces the old rich-text "<b>Label:</b> value" blocks, so figures align
+    and P&L tones come from the theme instead of inline HTML.
+    """
+
+    def __init__(self, columns: int = 1, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._columns = max(1, columns)
+        self._grid = QGridLayout(self)
+        self._grid.setContentsMargins(0, 0, 0, 0)
+        self._grid.setHorizontalSpacing(14)
+        self._grid.setVerticalSpacing(4)
+
+    def set_rows(self, rows) -> None:
+        """`rows`: iterable of (label, value) or (label, value, tone)."""
+        while self._grid.count():
+            item = self._grid.takeAt(0)
+            if item.widget() is not None:
+                item.widget().deleteLater()
+        for i, row in enumerate(rows):
+            label, value = row[0], row[1]
+            row_tone = row[2] if len(row) > 2 else ""
+            r, c = divmod(i, self._columns)
+            key = QLabel(label)
+            key.setProperty("role", "subtitle")
+            val = QLabel(value)
+            val.setProperty("role", "header-value")
+            val.setProperty("tone", row_tone)
+            val.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            val.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+            self._grid.addWidget(key, r, c * 2)
+            self._grid.addWidget(val, r, c * 2 + 1)
