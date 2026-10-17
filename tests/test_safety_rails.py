@@ -253,3 +253,79 @@ def test_prop_limits_and_paper_costs_are_unchanged() -> None:
     limits = PropLimits(starting_equity=1.0)
     assert (limits.daily_loss, limits.total_loss, limits.profit_target) == (0.03, 0.05, 0.08)
     assert (paper.TAKER_FEE, paper.MAKER_FEE, paper.SLIPPAGE_BPS) == (0.0040, 0.0025, 5.0)
+
+
+# ---------- send-time re-check (tighten only) ----------
+
+
+def _mutable_service(tmp_path, state: dict):
+    calls: list[dict] = []
+
+    class _Live:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return None
+
+        async def add_order(self, **kw):
+            calls.append(kw)
+            return {"txid": ["OLIVE-1"], "descr": {"order": "x"}}
+
+    broker = PaperBroker(tmp_path / "paper.json")
+    broker.seed_if_empty({"USD": 1_000_000.0})
+    svc = OrderService(
+        paper=broker,
+        live_client_factory=_Live,
+        audit=AuditLog(tmp_path),
+        mode_provider=lambda: state["mode"],
+        max_order_value_provider=lambda: state["cap"],
+    )
+    return svc, calls
+
+
+_SMALL = dict(
+    pair="BTC/USD",
+    kraken_pair="XBTUSD",
+    side="buy",
+    ordertype="limit",
+    volume=0.004,
+    price=60_000.0,
+    mark=60_000.0,
+)  # $240
+
+
+@pytest.mark.parametrize("mode", ["paper", "live"])
+def test_cap_lowered_after_confirmation_rejects_at_send(tmp_path, mode: str) -> None:
+    state = {"mode": mode, "cap": 500.0}
+    svc, calls = _mutable_service(tmp_path, state)
+    prepared, problems = svc.prepare(OrderRequest(**_SMALL), SPEC)
+    assert prepared is not None and problems == []
+    state["cap"] = 100.0  # user tightens the cap while the dialog is open
+    result = asyncio.run(svc.submit(prepared.token))
+    assert result.status == "rejected" and "max order cap" in result.detail
+    assert calls == []
+    (log,) = tmp_path.glob("orders-*.jsonl")
+    events = [json.loads(x)["event"] for x in log.read_text().splitlines()]
+    assert events[-1] == "reject"
+
+
+def test_mode_switch_after_confirmation_rejects_at_send(tmp_path) -> None:
+    state = {"mode": "paper", "cap": 500.0}
+    svc, calls = _mutable_service(tmp_path, state)
+    prepared, _ = svc.prepare(OrderRequest(**_SMALL), SPEC)
+    state["mode"] = "live"  # confirmed as paper, must never go out live
+    result = asyncio.run(svc.submit(prepared.token))
+    assert result.status == "rejected" and "Mode changed" in result.detail
+    assert calls == []
+    with pytest.raises(ValueError):  # the token is spent either way
+        asyncio.run(svc.submit(prepared.token))
+
+
+def test_unchanged_rails_still_send(tmp_path) -> None:
+    state = {"mode": "live", "cap": 500.0}
+    svc, calls = _mutable_service(tmp_path, state)
+    prepared, _ = svc.prepare(OrderRequest(**_SMALL), SPEC)
+    state["cap"] = 1_000.0  # loosening after confirmation changes nothing
+    result = asyncio.run(svc.submit(prepared.token))
+    assert result.status != "rejected" and len(calls) == 1

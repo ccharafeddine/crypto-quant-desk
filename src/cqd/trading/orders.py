@@ -9,6 +9,9 @@ Flow (no bypasses exist by construction):
 
 submit() accepts only a token minted by prepare(), and each token dies on
 first use - there is no API to send an unvalidated or unconfirmed order.
+At send time the max order cap is checked AGAIN (the user may have lowered
+it while the confirm dialog was open) and the mode must still be the one
+the dialog showed; either change rejects. These checks only tighten.
 Ambiguous live submits (timeout after send) are audited as "unknown" and
 reconciled against QueryOrders/OpenOrders instead of guessed.
 """
@@ -95,6 +98,7 @@ class OrderService:
         self._mode = mode_provider
         self._max_value = max_order_value_provider
         self._pending: dict[str, OrderRequest] = {}
+        self._prepared_mode: dict[str, str] = {}  # token -> mode the dialog showed
 
     # ---------- step 1: validate + mint token ----------
 
@@ -128,11 +132,13 @@ class OrderService:
             return None, problems
         token = secrets.token_hex(16)
         self._pending[token] = request
+        mode = self._mode()
+        self._prepared_mode[token] = mode
         return PreparedOrder(
             token=token,
             request=request,
             estimated_value=request.estimated_value(),
-            mode=self._mode(),
+            mode=mode,
         ), []
 
     # ---------- step 2: confirmed submission ----------
@@ -140,10 +146,22 @@ class OrderService:
     async def submit(self, token: str) -> OrderResult:
         """Send the order behind a one-shot confirmation token."""
         request = self._pending.pop(token, None)
+        prepared_mode = self._prepared_mode.pop(token, None)
         if request is None:
             raise ValueError("Order was not confirmed (unknown or already-used token).")
         mode = self._mode()
         value = request.estimated_value()
+        problem = self._send_time_problem(request, value, mode, prepared_mode)
+        if problem is not None:
+            await self._audit.record(
+                "reject",
+                mode=mode,
+                source=request.source,
+                request=request.model_dump(),
+                error=problem,
+                order_value_usd=value,
+            )
+            return OrderResult(status="rejected", mode=mode, detail=problem)
         await self._audit.record(
             "submit",
             mode=mode,
@@ -154,6 +172,33 @@ class OrderService:
         if mode == "paper":
             return await self._submit_paper(request, value)
         return await self._submit_live(request, value)
+
+    def _send_time_problem(
+        self, request: OrderRequest, value: float | None, mode: str, prepared_mode: str | None
+    ) -> str | None:
+        """Re-check the rails at the moment of sending (tighten-only)."""
+        if prepared_mode is not None and mode != prepared_mode:
+            return (
+                f"Mode changed from {prepared_mode} to {mode} after confirmation; "
+                "review the order again."
+            )
+        cap = self._max_value()
+        if cap is not None:
+            if value is None:
+                return "Order value cannot be checked against the max order cap (no price)."
+            if value > cap:
+                return (
+                    f"Order value {value:,.2f} exceeds the max order cap {cap:,.2f} "
+                    "(changed after confirmation; Settings > Trading)."
+                )
+        if request.close_ordertype and request.close_price is not None and cap is not None:
+            close_value = request.volume * request.close_price
+            if close_value > cap:
+                return (
+                    f"Conditional close value {close_value:,.2f} exceeds the max order cap "
+                    f"{cap:,.2f}."
+                )
+        return None
 
     async def _submit_paper(self, request: OrderRequest, value: float | None) -> OrderResult:
         try:
