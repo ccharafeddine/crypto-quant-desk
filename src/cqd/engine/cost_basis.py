@@ -14,7 +14,7 @@ True running average-cost method, computed per (asset, quote) group:
   or summed across quotes: a BTC-quoted DOT position has a BTC cost basis,
   and the UI labels it as such. Historical USD conversion is deferred.
 
-For tax lots you may want FIFO or HIFO; that's a future module.
+FIFO and HIFO tax lots live in `engine.tax_lots`, on the same fee rules.
 """
 
 from __future__ import annotations
