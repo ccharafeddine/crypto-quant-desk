@@ -136,6 +136,19 @@ def fhs_es(returns, alpha: float = 0.975, lam: float = EWMA_LAMBDA) -> float:
     return float(sigma_next * z[z <= q].mean())
 
 
+def portfolio_returns(weights: pd.Series, returns: pd.DataFrame) -> pd.Series:
+    """Ex-ante daily returns of TODAY's weights over the common history.
+
+    Assets without return data (cash) contribute 0 at their weight; rows where
+    any priced holding is missing are dropped rather than read as 0%, the same
+    common-window rule `compute_portfolio_risk` uses."""
+    held = [a for a in weights.index if a in returns.columns]
+    if not held:
+        return pd.Series(dtype=float)
+    frame = returns[held].dropna()
+    return (frame * weights.loc[held].astype(float)).sum(axis=1)
+
+
 _VAR_FUNCS = {
     "historical": historical_var,
     "fhs": fhs_var,

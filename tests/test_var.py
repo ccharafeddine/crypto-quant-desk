@@ -105,3 +105,14 @@ def test_var_suite_reports_every_method() -> None:
     assert set(s.var95) == set(V.METHODS) == set(s.var99)
     assert all(s.var99[m] < s.var95[m] < 0 for m in V.METHODS)
     assert s.es975_hist < 0 and s.n_obs == 800
+
+
+def test_portfolio_returns_use_todays_weights_on_the_common_window() -> None:
+    import pandas as pd
+
+    rets = pd.DataFrame({"BTC": [0.10, -0.05, 0.02], "ETH": [None, 0.10, -0.10]})
+    w = pd.Series({"BTC": 0.5, "ETH": 0.3, "USD": 0.2})
+    out = V.portfolio_returns(w, rets)
+    assert list(out.index) == [1, 2]  # row 0 dropped: ETH had no price yet
+    assert out.iloc[0] == pytest.approx(0.5 * -0.05 + 0.3 * 0.10)
+    assert V.portfolio_returns(pd.Series({"USD": 1.0}), rets).empty
