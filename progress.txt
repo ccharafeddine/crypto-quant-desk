@@ -456,7 +456,14 @@ Last session: 2026-07-10
   cards, screenshots png+webp, captions.json, detail.md) built by scripts/build_site_kit.py
   from scripts/capture_screenshots.py output.
 
-## Next (all need the owner's machines)
+## Phase 5 - web demo (branch phase5-web-demo, 2026-10-16)
+- web/ static page + Pyodide 314.0.7 worker; cqd/web/demo.py is the JSON bridge (pure,
+  tested); scripts/build_web_demo.py (engine-only bundle, refuses order/UI code),
+  serve_web_demo.py (local server with the _headers CSP), check_web_demo.py (headless
+  Chrome timings + host allowlist), deploy_web_demo.sh (Cloudflare Pages, guarded).
+- NOT deployed: needs the owner's approval, a Cloudflare token and the cqd.chafic.me
+  custom domain attached to the Pages project.
+
 - Expansion v2.2 verification on the owner's machine: enable Settings > Strategy, pick a
   pair, confirm the Signals panel shows a sized setup + timing verdict + backtest/live, and
   that "Send to ticket" pre-fills (never submits). Reconcile the costed replay /

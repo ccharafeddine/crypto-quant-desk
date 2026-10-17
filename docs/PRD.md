@@ -135,6 +135,14 @@ A tabbed panel on the Risk page; every number is engine-computed (pure, tested) 
 - **AC15.6 Tax lots**: average cost, FIFO and HIFO side by side for USD-quoted trades; realized + unrealized is identical across methods (tested invariant). Arithmetic, not tax advice.
 - **AC15.7 Parameter stability**: walk-forward expectancy over a fast×slow MA grid with the chosen cell outlined and the share of positive cells, so a lone bright cell reads as curve fit.
 
+## Web demo (Phase 5)
+
+### F16. In-browser demo (cqd.chafic.me)
+- **AC16.1** A static page runs the pure engine in Pyodide on live Kraken **public** data (daily OHLC, AssetPairs) for a model book the visitor sets: KPIs, holdings risk, the VaR set with backtests, crash replays and fan, liquidity, attribution, and the BTC/USD signal with its costed backtest and stability grid.
+- **AC16.2** No keys, no account, no order path: the bundle holds only `cqd/engine`, `data/normalize`, `data/crash_history` and `cqd/web`. The build refuses trading/UI/client/credential code or private-endpoint strings, and a test pins it.
+- **AC16.3** A strict CSP allows scripts only from the site and the Pyodide CDN, and requests only to those and `api.kraken.com`. A headless check fails on console errors or any other host.
+- **AC16.4** Deploying needs explicit approval: `scripts/deploy_web_demo.sh` refuses without `CQD_DEPLOY_APPROVED=yes` and `--confirm cqd.chafic.me`.
+
 ## User stories
 
 - As the owner, I want my Kraken keys stored in Windows Credential Manager via a Settings dialog, so that no plaintext secret exists on disk or in the repo.
@@ -164,7 +172,7 @@ A tabbed panel on the Risk page; every number is engine-computed (pure, tested) 
 - Trade-from-chart (click/drag order placement) — roadmap phase 4+.
 - Futures, margin, staking/earn actions. Spot only. (Staked sub-balances still display, folded into base assets.)
 - macOS/Linux packaging (code stays cross-platform; packaging effort is Windows-only).
-- Mobile, web, or any remote/served UI.
+- Mobile, or any remote/served UI that touches an account. (The read-only public-data web demo, F16, is the one exception.)
 - Withdrawals — permanently out of scope, not just v1.
 - Historical USD conversion of crypto-quoted cost bases (quote-aware labeling stays, per the known caveat).
 
