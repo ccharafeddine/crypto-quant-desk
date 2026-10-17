@@ -206,6 +206,12 @@ class ChartPanel(Panel):
 
     # ---- data ----
 
+    def showEvent(self, event) -> None:
+        # Polling skips hidden panels, and pages open closed docks later, so
+        # load as soon as this panel is shown instead of waiting a full tick.
+        super().showEvent(event)
+        QTimer.singleShot(0, self._reload)
+
     def _reload(self) -> None:
         if not (self._pair and self.isVisible()):
             return

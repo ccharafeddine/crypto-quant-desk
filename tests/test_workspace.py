@@ -243,6 +243,28 @@ def test_toggle_actions_cover_every_panel(make_workspace) -> None:
     assert [a.text() for a in actions] == [k.title() for k in PANEL_KEYS]
 
 
+@pytest.mark.parametrize(
+    ("module", "cls", "hook"),
+    [
+        ("cqd.ui.panels.chart", "ChartPanel", "_reload"),
+        ("cqd.ui.panels.watchlist", "WatchlistPanel", "_poll"),
+        ("cqd.ui.panels.book", "BookPanel", "_poll"),
+    ],
+)
+def test_polling_panels_load_when_a_page_first_shows_them(qtbot, module, cls, hook) -> None:
+    # Pages keep off-page docks closed, and polling skips hidden panels, so a
+    # panel must load on show rather than sit empty until the next tick.
+    import importlib
+
+    panel_cls = getattr(importlib.import_module(module), cls)
+    calls: list[bool] = []
+    panel = panel_cls()
+    qtbot.addWidget(panel)
+    setattr(panel, hook, lambda: calls.append(panel.isVisible()))
+    panel.show()
+    qtbot.waitUntil(lambda: bool(calls), timeout=1000)
+    assert calls[0] is True
+
 
 def test_signals_page_gives_the_signals_card_the_wider_split(
     make_workspace, tmp_path, qtbot
