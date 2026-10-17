@@ -132,3 +132,40 @@ def test_backtest_rows_show_r_costs_and_out_of_sample() -> None:
         build_signals_view(None, _features(), None, _verdict(), _stats(), None).backtest_rows
     )
     assert rows["Out-of-sample"] == "—"
+
+
+def test_curve_points_pair_net_and_frictionless() -> None:
+    from cqd.ui.panels.signals import curve_points
+
+    stats = _stats().model_copy(
+        update={
+            "equity_curve": [100.0, 101.0, 99.0],
+            "curve_times": [1, 2, 3],
+            "frictionless_curve": [100.0, 102.0],
+        }
+    )
+    x, net, free = curve_points(stats)
+    assert x == [1.0, 2.0, 3.0] and net == [100.0, 101.0, 99.0] and free == [100.0, 102.0]
+    assert curve_points(None) == ([], [], [])
+
+
+def test_r_histogram_bins_at_half_r() -> None:
+    from cqd.ui.panels.signals import r_histogram
+
+    edges, counts = r_histogram([-1.0, -0.9, 0.1, 2.9])
+    assert edges[0] == -1.0 and sum(counts) == 4
+    assert counts[0] == 2 and counts[-1] == 1
+    assert r_histogram([]) == ([], [])
+
+
+def test_backtest_rows_include_the_ci_and_the_frictionless_twin() -> None:
+    stats = _stats().model_copy(
+        update={
+            "expectancy_r": -0.1,
+            "expectancy_r_ci": (-0.4, 0.2),
+            "frictionless_expectancy_r": 0.02,
+        }
+    )
+    rows = dict(build_signals_view(None, _features(), None, _verdict(), stats, None).backtest_rows)
+    assert rows["Expectancy 90% CI"] == "-0.40R … +0.20R"
+    assert rows["Frictionless (R)"] == "+0.02R"

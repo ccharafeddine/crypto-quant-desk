@@ -16,18 +16,29 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+import pyqtgraph as pg
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import QLabel, QPushButton
+from PySide6.QtWidgets import (
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QSizePolicy,
+    QVBoxLayout,
+    QWidget,
+)
 
 from cqd.data.symbols import parse_symbol
-from cqd.ui.format import format_price
+from cqd.ui.format import format_price, format_qty
 from cqd.ui.panels.base import Panel
-from cqd.ui.widgets import Badge, PanelHeader, PanelStatus
+from cqd.ui.theme import get_theme, load_theme_name
+from cqd.ui.widgets import Badge, KeyValueGrid, PanelHeader, PanelStatus, set_kind
 
 _FOOTNOTE = (
     "Confidence is trend-strength only (distance above the trend MA + slope), "
     "never order-book data. The timing verdict gates WHEN to act, never the "
-    "direction. Backtest is frictionless; live is this app's realized signals."
+    "direction. Backtest: closed-bar signals filled at the next open, paper-broker "
+    "fees and slippage, gap-aware stops; only the walk-forward out-of-sample line is "
+    "evidence. Live is this app's own recorded signals."
 )
 
 
@@ -95,7 +106,7 @@ def _setup_view(setup) -> tuple[str, list[tuple[str, str]], str, list[str]]:
         ("Direction", setup.direction.capitalize()),
         ("Entry", _money(setup.entry_ref)),
         ("Stop", f"{_money(setup.stop)}  (risk {_money(setup.risk_quote)})"),
-        ("Size", f"{_money(setup.size_base)} base  ·  {_money(setup.size_quote)} quote"),
+        ("Size", f"{format_qty(setup.size_base)} base  ·  {_money(setup.size_quote)} quote"),
         ("Targets", ", ".join(_money(t) for t in setup.targets) or "—"),
         ("Reward : Risk", f"{setup.rr:g} : 1"),
         ("Confidence", _pct(setup.confidence)),
@@ -146,11 +157,50 @@ def _backtest_rows(stats) -> list[tuple[str, str]]:
         ("Win rate", _pct(stats.win_rate)),
         ("Expectancy", _money(stats.expectancy)),
         ("Expectancy (R)", _r(getattr(stats, "expectancy_r", None))),
+        ("Expectancy 90% CI", _ci(getattr(stats, "expectancy_r_ci", None))),
+        (
+            "Frictionless (R)",
+            _r(getattr(stats, "frictionless_expectancy_r", None)),
+        ),
         ("Profit factor", _num(stats.profit_factor)),
         ("Max drawdown", _pct(stats.max_drawdown)),
         ("Costs paid", _money(getattr(stats, "costs_paid", None))),
         ("Out-of-sample", _oos(stats)),
     ]
+
+
+def _ci(ci) -> str:
+    if not ci:
+        return "—"
+    return f"{_r(ci[0])} … {_r(ci[1])}"
+
+
+def curve_points(stats) -> tuple[list[float], list[float], list[float]]:
+    """(x seconds, net equity, frictionless equity) for the backtest chart.
+
+    The frictionless twin can stop on a different bar (it may PASS sooner), so
+    it is cut to its own length; empty lists when there is nothing to draw.
+    """
+    if stats is None or not getattr(stats, "equity_curve", None):
+        return [], [], []
+    x = [float(t) for t in stats.curve_times]
+    free = list(getattr(stats, "frictionless_curve", None) or [])
+    return x, list(stats.equity_curve), free[: len(x)]
+
+
+def r_histogram(rs: list[float], width: float = 0.5) -> tuple[list[float], list[int]]:
+    """R-multiples binned at `width` R: (bin left edges, counts)."""
+    if not rs:
+        return [], []
+    import math
+
+    lo = math.floor(min(rs) / width) * width
+    hi = math.floor(max(rs) / width) * width
+    edges = [lo + i * width for i in range(int(round((hi - lo) / width)) + 1)]
+    counts = [0] * len(edges)
+    for r in rs:
+        counts[min(len(edges) - 1, int((r - lo) // width))] += 1
+    return edges, counts
 
 
 def _r(x) -> str:
@@ -209,15 +259,14 @@ def build_signals_view(setup, features, fill, verdict, backtest, live) -> Signal
     )
 
 
-def _rows_html(rows: list[tuple[str, str]]) -> str:
-    return "<br>".join(f"<b>{label}:</b> {value}" for label, value in rows) or "—"
-
-
 class SignalsPanel(Panel):
     title = "Signals"
 
     #: (kraken altname, price, volume) to pre-fill the ticket. Never submits.
     send_to_ticket = Signal(str, float, float)
+    #: The empty state's button: open Settings › Strategy.
+    open_settings = Signal()
+    refresh_requested = Signal()
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -227,6 +276,7 @@ class SignalsPanel(Panel):
         self._verdict = None
         self._backtest = None
         self._live: dict | None = None
+        theme = get_theme(load_theme_name())
 
         header = PanelHeader("Signals")
         self.symbol_label = QLabel("—")
@@ -237,55 +287,108 @@ class SignalsPanel(Panel):
         header.add_right(self.timeframe_label)
         self._layout.addWidget(header)
 
-        # Setup card.
-        self._layout.addWidget(_section("Setup"))
+        # Empty state: explains itself instead of an empty shell with a chip.
+        self.empty = QWidget()
+        elay = QVBoxLayout(self.empty)
+        elay.setContentsMargins(0, 18, 0, 18)
+        title = QLabel("Signals are off")
+        title.setProperty("role", "title")
+        elay.addWidget(title)
+        body = QLabel(
+            "The trend engine (MA-cross or Donchian breakout, ATR stops) sizes a "
+            "setup for the active pair, reads the order book for timing, and "
+            "backtests itself with paper-broker costs and a walk-forward. It is "
+            "advisory: it can pre-fill the order ticket, never send an order. "
+            "Turn it on and pick pairs, timeframe and risk per trade in "
+            "Settings › Strategy."
+        )
+        body.setProperty("role", "empty-state")
+        body.setWordWrap(True)
+        elay.addWidget(body)
+        open_btn = QPushButton("Open Settings › Strategy")
+        open_btn.setProperty("role", "primary")
+        open_btn.clicked.connect(self.open_settings.emit)
+        open_btn.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
+        elay.addWidget(open_btn)
+        elay.addStretch(1)
+        self._layout.addWidget(self.empty, 1)
+
+        self.content = QWidget()
+        cols = QHBoxLayout(self.content)
+        cols.setContentsMargins(0, 0, 0, 0)
+        cols.setSpacing(18)
+        left = QVBoxLayout()
+        left.setSpacing(6)
+
+        left.addWidget(_section("Setup"))
         self.state_label = QLabel("No active setup")
         self.state_label.setProperty("role", "subtitle")
-        self._layout.addWidget(self.state_label)
-        self.setup_body = _rich_label()
-        self._layout.addWidget(self.setup_body)
+        left.addWidget(self.state_label)
+        self.setup_grid = KeyValueGrid()
+        left.addWidget(self.setup_grid)
         self.rationale_label = QLabel("")
         self.rationale_label.setProperty("role", "footnote")
         self.rationale_label.setWordWrap(True)
-        self._layout.addWidget(self.rationale_label)
+        left.addWidget(self.rationale_label)
         self.warnings_label = QLabel("")
-        self.warnings_label.setProperty("role", "warning")
+        self.warnings_label.setProperty("role", "subtitle")
+        self.warnings_label.setProperty("tone", "warn")
         self.warnings_label.setWordWrap(True)
         self.warnings_label.setVisible(False)
-        self._layout.addWidget(self.warnings_label)
-
-        self.send_btn = QPushButton("Send to ticket")
+        left.addWidget(self.warnings_label)
+        self.send_btn = QPushButton("Send to ticket (pre-fill only)")
         self.send_btn.setEnabled(False)
         self.send_btn.clicked.connect(self._on_send)
-        self._layout.addWidget(self.send_btn)
+        left.addWidget(self.send_btn)
 
-        # Execution overlay.
-        self._layout.addWidget(_section("Execution / timing"))
-        self.verdict_badge = Badge("WAIT")
-        self.verdict_badge.setProperty("verdict", "wait")
-        self._layout.addWidget(self.verdict_badge)
+        left.addSpacing(6)
+        left.addWidget(_section("Execution · timing"))
+        verdict_row = QHBoxLayout()
+        self.verdict_badge = Badge("WAIT", kind="neutral")
+        verdict_row.addWidget(self.verdict_badge)
         self.reasons_label = QLabel("")
         self.reasons_label.setProperty("role", "footnote")
         self.reasons_label.setWordWrap(True)
-        self._layout.addWidget(self.reasons_label)
-        self.exec_body = _rich_label()
-        self._layout.addWidget(self.exec_body)
+        verdict_row.addWidget(self.reasons_label, 1)
+        left.addLayout(verdict_row)
+        self.exec_grid = KeyValueGrid()
+        left.addWidget(self.exec_grid)
 
-        # Track record.
-        self._layout.addWidget(_section("Track record"))
-        self.backtest_body = _rich_label()
-        self.backtest_body.setProperty("role", "subtitle")
-        self._layout.addWidget(QLabel("Backtest"))
-        self._layout.addWidget(self.backtest_body)
-        self._layout.addWidget(QLabel("Live"))
-        self.live_body = _rich_label()
-        self._layout.addWidget(self.live_body)
+        left.addSpacing(6)
+        left.addWidget(_section("Live track record"))
+        self.live_grid = KeyValueGrid()
+        left.addWidget(self.live_grid)
         self.live_note = QLabel("")
         self.live_note.setProperty("role", "footnote")
         self.live_note.setWordWrap(True)
-        self._layout.addWidget(self.live_note)
+        left.addWidget(self.live_note)
+        left.addStretch(1)
+        cols.addLayout(left, 2)
 
-        self._layout.addStretch(1)
+        right = QVBoxLayout()
+        right.setSpacing(6)
+        right.addWidget(_section("Backtest · net of costs vs frictionless"))
+        self.curve_plot = pg.PlotWidget(axisItems={"bottom": pg.DateAxisItem()})
+        self.curve_plot.setBackground(theme.surface)
+        self.curve_plot.showGrid(x=False, y=True, alpha=0.12)
+        self.curve_plot.setMinimumHeight(170)
+        self.curve_plot.addLegend(offset=(8, 4), labelTextColor=theme.text_muted)
+        for axis in ("left", "bottom"):
+            self.curve_plot.getAxis(axis).setTextPen(theme.text_faint)
+            self.curve_plot.getAxis(axis).setPen(theme.border)
+        right.addWidget(self.curve_plot, 3)
+        right.addWidget(_section("R-multiple distribution (net)"))
+        self.r_plot = pg.PlotWidget()
+        self.r_plot.setBackground(theme.surface)
+        self.r_plot.setMinimumHeight(110)
+        for axis in ("left", "bottom"):
+            self.r_plot.getAxis(axis).setTextPen(theme.text_faint)
+            self.r_plot.getAxis(axis).setPen(theme.border)
+        right.addWidget(self.r_plot, 2)
+        self.backtest_grid = KeyValueGrid(columns=2)
+        right.addWidget(self.backtest_grid)
+        cols.addLayout(right, 3)
+        self._layout.addWidget(self.content, 1)
 
         self.footnote = QLabel(_FOOTNOTE)
         self.footnote.setProperty("role", "footnote")
@@ -294,6 +397,7 @@ class SignalsPanel(Panel):
 
         self.status = PanelStatus("Waiting for a signal…", self.refresh)
         self._layout.addWidget(self.status)
+        self.set_enabled_state(False)
 
     # ---- external updates (wired to SignalsService in main_window) ----
 
@@ -302,7 +406,10 @@ class SignalsPanel(Panel):
         self.timeframe_label.setText(timeframe_label)
 
     def set_enabled_state(self, enabled: bool) -> None:
-        """Reflect the Settings > Strategy on/off switch in the status line."""
+        """Off: the explanatory empty state. On: the setup/backtest view."""
+        self.empty.setVisible(not enabled)
+        self.content.setVisible(enabled)
+        self.footnote.setVisible(enabled)
         if enabled:
             self.status.setText("Waiting for a signal…")
         else:
@@ -316,6 +423,7 @@ class SignalsPanel(Panel):
     def on_stats_update(self, backtest, live) -> None:
         self._backtest, self._live = backtest, live
         self._rebuild()
+        self._render_backtest()
 
     def on_error(self, message: str) -> None:
         self.status.error(message)
@@ -324,8 +432,6 @@ class SignalsPanel(Panel):
         """Retry hook: request a fresh pull (connected in main_window)."""
         self.refresh_requested.emit()
 
-    refresh_requested = Signal()
-
     # ---- rendering ----
 
     def _rebuild(self) -> None:
@@ -333,21 +439,43 @@ class SignalsPanel(Panel):
             self._setup, self._features, self._fill, self._verdict, self._backtest, self._live
         )
         self.state_label.setText(view.state_label)
-        self.setup_body.setText(_rows_html(view.setup_rows) if view.has_setup else "—")
+        self.setup_grid.set_rows(view.setup_rows)
         self.rationale_label.setText(view.rationale)
         self.warnings_label.setText("\n".join(view.prop_warnings))
         self.warnings_label.setVisible(bool(view.prop_warnings))
         self.send_btn.setEnabled(view.has_setup)
 
         self.verdict_badge.setText(view.verdict)
-        self.verdict_badge.setProperty("verdict", view.verdict_role)
-        _repolish(self.verdict_badge)
+        set_kind(self.verdict_badge, "kind", _VERDICT_KIND.get(view.verdict_role, "neutral"))
         self.reasons_label.setText(" · ".join(view.verdict_reasons))
-        self.exec_body.setText(_rows_html(view.exec_rows))
-
-        self.backtest_body.setText(_rows_html(view.backtest_rows))
-        self.live_body.setText(_rows_html(view.live_rows))
+        self.exec_grid.set_rows(view.exec_rows)
+        self.backtest_grid.set_rows(view.backtest_rows)
+        self.live_grid.set_rows(view.live_rows)
         self.live_note.setText(view.live_note)
+
+    def _render_backtest(self) -> None:
+        theme = get_theme(load_theme_name())
+        self.curve_plot.clear()
+        self.r_plot.clear()
+        x, net, free = curve_points(self._backtest)
+        if x:
+            if free:
+                self.curve_plot.plot(
+                    x[: len(free)],
+                    free,
+                    pen=pg.mkPen(theme.text_faint, width=1, style=Qt.PenStyle.DashLine),
+                    name="Frictionless",
+                )
+            self.curve_plot.plot(x, net, pen=pg.mkPen(theme.accent, width=2), name="Net of costs")
+        rs = list(getattr(self._backtest, "r_multiples", None) or [])
+        edges, counts = r_histogram(rs)
+        if edges:
+            brushes = [theme.positive if e >= 0 else theme.negative for e in edges]
+            self.r_plot.addItem(
+                pg.BarGraphItem(
+                    x0=edges, width=0.45, height=counts, brushes=brushes, pen=pg.mkPen(None)
+                )
+            )
 
     def _on_send(self) -> None:
         if self._setup is None:
@@ -358,20 +486,10 @@ class SignalsPanel(Panel):
         )
 
 
+_VERDICT_KIND = {"go": "go", "caution": "warn", "wait": "neutral"}
+
+
 def _section(title: str) -> QLabel:
     label = QLabel(title)
     label.setProperty("role", "panel-title")
     return label
-
-
-def _rich_label() -> QLabel:
-    label = QLabel("—")
-    label.setTextFormat(Qt.TextFormat.RichText)
-    label.setWordWrap(True)
-    return label
-
-
-def _repolish(widget) -> None:
-    style = widget.style()
-    style.unpolish(widget)
-    style.polish(widget)
