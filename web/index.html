@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Crypto Quant Desk · live demo</title>
+  <meta name="description" content="The Crypto Quant Desk risk engine running in your browser on live Kraken public data: VaR backtests, crash replays, liquidity, attribution and the trend strategy. No keys, no orders.">
+  <meta property="og:title" content="Crypto Quant Desk · live demo">
+  <meta property="og:description" content="Desk-grade crypto risk analytics in the browser, on live Kraken data. No keys, no orders.">
+  <meta property="og:image" content="card-1200x675.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="favicon-32.png" sizes="32x32">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <img src="mark-256.png" alt="" class="mark">
+    <div class="brand">Crypto Quant Desk <span class="tag">LIVE DEMO</span></div>
+    <div class="note">Kraken public data · runs in your browser · <b>no keys, no orders</b></div>
+    <div class="status" id="status"><span class="dot"></span><span id="status-text">Starting…</span></div>
+  </header>
+
+  <main>
+    <section class="book card">
+      <h2>Model book</h2>
+      <p class="muted">Set weights for a sample book. The desktop app reads your real Kraken balances; this demo uses the same engine on a book you choose.</p>
+      <div id="weights" class="weights"></div>
+      <div class="book-row">
+        <label>Value (USD) <input id="nav" type="number" min="100" step="100" value="25000"></label>
+        <span id="weight-total" class="muted"></span>
+        <button id="run" class="primary">Recompute</button>
+      </div>
+    </section>
+
+    <section class="kpis" id="kpis"></section>
+
+    <nav class="tabs" id="tabs">
+      <button data-tab="overview" class="on">Overview</button>
+      <button data-tab="var">VaR &amp; backtests</button>
+      <button data-tab="crashes">Crash replays</button>
+      <button data-tab="liquidity">Liquidity &amp; attribution</button>
+      <button data-tab="signals">Signals</button>
+    </nav>
+
+    <section class="tab on card" id="tab-overview">
+      <h3>Today's weights, backcast against BTC buy-and-hold</h3>
+      <svg id="chart-backcast" class="chart" viewBox="0 0 900 300" preserveAspectRatio="none"></svg>
+      <p class="foot">Ex-ante: today's weights applied to Kraken's closed daily bars (up to 720). It shows how this book <i>would have</i> moved, not a track record. The forming candle is excluded.</p>
+      <h3>Holdings</h3>
+      <table id="t-holdings"></table>
+      <h3>Deepest drawdowns of the backcast</h3>
+      <table id="t-drawdowns"></table>
+    </section>
+
+    <section class="tab card" id="tab-var">
+      <h3>One-day VaR, four models</h3>
+      <table id="t-var"></table>
+      <div id="es" class="kv"></div>
+      <h3>VaR 99% backtest: rolling 250-day window, one step ahead</h3>
+      <table id="t-backtest"></table>
+      <p class="foot">Kupiec tests whether the number of exceptions matches 1%. Christoffersen tests whether exceptions cluster. A model fails if either p-value is below 0.05.</p>
+    </section>
+
+    <section class="tab card" id="tab-crashes">
+      <h3>This book through past crashes</h3>
+      <table id="t-replays"></table>
+      <p class="foot" id="depeg"></p>
+      <h3>30-day NAV fan: block bootstrap (5-day blocks), zero drift</h3>
+      <svg id="chart-fan" class="chart" viewBox="0 0 900 260" preserveAspectRatio="none"></svg>
+      <p class="foot" id="fan-note"></p>
+    </section>
+
+    <section class="tab card" id="tab-liquidity">
+      <h3>Liquidity against Kraken's own volume</h3>
+      <table id="t-liquidity"></table>
+      <p class="foot">ADV is the 30-day average daily USD volume on the Kraken USD pair. Days to exit assumes selling at 10% of daily volume.</p>
+      <h3>Active return vs BTC, last 365 days</h3>
+      <div id="attribution" class="kv"></div>
+      <p class="foot">Allocation (cash vs invested), BTC beta and selection add up exactly to the active return. Static weights; past rebalancing is not modelled.</p>
+    </section>
+
+    <section class="tab card" id="tab-signals">
+      <div id="signals-wait" class="muted">Running the strategy backtest…</div>
+      <div id="signals" hidden>
+        <div class="grid2">
+          <div>
+            <h3>BTC/USD setup (advisory)</h3>
+            <div id="setup" class="kv"></div>
+            <p class="foot">Trend strategy on daily bars, risking 0.5% of a $10,000 account to an ATR stop. The desktop app can only pre-fill its order ticket from this, and this demo has no order path at all.</p>
+          </div>
+          <div>
+            <h3>Backtest: net of costs vs frictionless</h3>
+            <svg id="chart-bt" class="chart small" viewBox="0 0 500 220" preserveAspectRatio="none"></svg>
+            <div id="bt" class="kv"></div>
+          </div>
+        </div>
+        <h3>Parameter stability: net expectancy (R per trade) by fast × slow MA</h3>
+        <table id="t-stability" class="heat"></table>
+        <p class="foot" id="stability-note"></p>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <span id="timing"></span>
+    <span>Built by Chafic Charafeddine · <a href="https://github.com/ccharafeddine/crypto-quant-desk">source</a> · Not investment or tax advice.</span>
+  </footer>
+  <script src="app.js"></script>
+</body>
+</html>
