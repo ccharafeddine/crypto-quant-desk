@@ -110,3 +110,25 @@ def test_build_view_wait_verdict_role() -> None:
     v = TimingVerdict(verdict="WAIT", reasons=["book unknown"], score=0.0)
     view = build_signals_view(None, None, None, v, None, None)
     assert view.verdict == "WAIT" and view.verdict_role == "wait"
+
+
+def test_backtest_rows_show_r_costs_and_out_of_sample() -> None:
+    stats = _stats().model_copy(
+        update={
+            "expectancy_r": 0.25,
+            "costs_paid": 42.5,
+            "oos_trades": 7,
+            "oos_expectancy_r": -0.1,
+            "oos_return": -0.012,
+            "oos_folds": 3,
+        }
+    )
+    rows = dict(build_signals_view(None, _features(), None, _verdict(), stats, None).backtest_rows)
+    assert rows["Expectancy (R)"] == "+0.25R"
+    assert rows["Costs paid"] == "42.5"
+    assert rows["Out-of-sample"] == "-0.10R over 7 trades, -1.2% (3 folds)"
+    # Without a walk-forward the line is an honest dash, not a zero.
+    rows = dict(
+        build_signals_view(None, _features(), None, _verdict(), _stats(), None).backtest_rows
+    )
+    assert rows["Out-of-sample"] == "—"

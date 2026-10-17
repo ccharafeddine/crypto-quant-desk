@@ -144,9 +144,27 @@ def _backtest_rows(stats) -> list[tuple[str, str]]:
         ("Trades", str(stats.trades)),
         ("Win rate", _pct(stats.win_rate)),
         ("Expectancy", _money(stats.expectancy)),
+        ("Expectancy (R)", _r(getattr(stats, "expectancy_r", None))),
         ("Profit factor", _num(stats.profit_factor)),
         ("Max drawdown", _pct(stats.max_drawdown)),
+        ("Costs paid", _money(getattr(stats, "costs_paid", None))),
+        ("Out-of-sample", _oos(stats)),
     ]
+
+
+def _r(x) -> str:
+    return "—" if (x is None or _is_nan(x)) else f"{x:+.2f}R"
+
+
+def _oos(stats) -> str:
+    """Walk-forward out-of-sample line: the only number that is evidence."""
+    folds = getattr(stats, "oos_folds", None)
+    if not folds:
+        return "—"
+    return (
+        f"{_r(stats.oos_expectancy_r)} over {stats.oos_trades} trades, "
+        f"{_pct(stats.oos_return)} ({folds} folds)"
+    )
 
 
 def _live_rows(live) -> tuple[list[tuple[str, str]], str]:
