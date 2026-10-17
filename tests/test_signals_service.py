@@ -308,3 +308,29 @@ def test_service_backtest_carries_costs_and_out_of_sample() -> None:
     assert stats.fee_bps == 40.0 and stats.slippage_bps == 5.0
     assert stats.oos_folds is not None and stats.oos_folds >= 1
     assert ss.BACKTEST_BARS == 720
+
+
+def test_service_resumes_a_pending_setup_after_restart_and_symbol_switch(tmp_path) -> None:
+    from cqd.data.track_record import TrackRecordLog
+
+    log = TrackRecordLog(tmp_path)
+    svc = _service(_FakeClient(_candles(UPTREND), _book()), track_log=log)
+    svc.set_symbol(BTC)
+    asyncio.run(svc.refresh_once(BTC))
+    pending = svc._pending
+    assert pending is not None
+    svc.set_symbol(ETH)  # switching away no longer forgets the BTC setup
+    assert svc._pending is None
+    svc.set_symbol(BTC)
+    assert svc._pending == pending
+
+    fresh = _service(_FakeClient(_candles(UPTREND), _book()), track_log=TrackRecordLog(tmp_path))
+    fresh.set_symbol(BTC)  # a new process resumes it from the sidecar
+    assert fresh._pending == pending
+    down = _candles(UPTREND) + [
+        Candle(time=1000 + 7 * 60, open=12.0, high=13.0, low=11.0, close=12.0, volume=1.0)
+    ]
+    fresh._client_factory = lambda: _FakeClient(down, _book())
+    asyncio.run(fresh.refresh_once(BTC))
+    assert [r.outcome for r in log.read()] == ["loss"]
+    assert fresh._pending is None and log.load_pending(BTC.display) is None

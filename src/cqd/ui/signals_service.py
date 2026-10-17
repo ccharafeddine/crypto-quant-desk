@@ -209,7 +209,11 @@ class SignalsService(QObject):
         """Follow a new active symbol: reset per-symbol state and pull now."""
         self._symbol = symbol
         self._flow.clear()
-        self._pending = None  # a pending setup belongs to the old symbol
+        # A pending setup belongs to its symbol: resume this one's from disk
+        # (the old symbol's stays saved and resumes when it is selected again).
+        self._pending = (
+            self._track_log.load_pending(symbol.display) if self._track_log is not None else None
+        )
         self._trigger()
 
     def refresh(self) -> None:
@@ -292,6 +296,7 @@ class SignalsService(QObject):
             and snapshot.setup.state == TrendState.LONG_ACTIVE
         ):
             self._pending = SignalRecord.from_setup(snapshot.setup)
+            self._track_log.save_pending(symbol.display, self._pending)
 
         self._emit_stats(candles, symbol, equity)
 
@@ -314,6 +319,8 @@ class SignalsService(QObject):
             )
             if resolved.outcome != "pending":
                 self._track_log.append(resolved)
+                key = self._symbol.display if self._symbol else self._pending.symbol
+                self._track_log.save_pending(key, None)
                 self._pending = None
                 return
 

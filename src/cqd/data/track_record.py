@@ -6,9 +6,10 @@ the panel can show backtest and live stats side by side - the honest "measured,
 not promised" posture from SIGNALS_PLAN.md §0.
 
 Append-only JSONL, mirroring `trading/audit.py`: one line per resolved setup,
-never edited or deleted. Pending setups are held in memory by the service (S5)
-and a line is appended only once the stop or target is hit, so the file is a
-clean history of realized outcomes. `summarize_records` reuses the backtest's
+never edited or deleted; a line is appended only once the stop or target is
+hit, so the file is a clean history of realized outcomes. The setup still in
+flight per symbol is kept in a small sidecar (`signals-pending.json`) so a
+restart or a symbol switch resumes it instead of forgetting it. `summarize_records` reuses the backtest's
 `trade_summary`, so live and backtest expectancy mean exactly the same thing.
 
 This module does file I/O, so it lives in the data layer, not the pure engine;
@@ -25,7 +26,12 @@ from typing import Literal
 from pydantic import BaseModel
 
 from cqd.data.paths import app_data_dir
-from cqd.engine.backtest import classify_exit, trade_summary
+from cqd.engine.backtest import (
+    PAPER_SLIPPAGE_BPS,
+    PAPER_TAKER_FEE_BPS,
+    classify_exit,
+    trade_summary,
+)
 from cqd.engine.signals import TradeSetup
 
 #: Below this many resolved trades the live stats are shown as "not yet
@@ -48,8 +54,10 @@ class SignalRecord(BaseModel):
     created_ts: int
     outcome: Literal["pending", "win", "loss"] = "pending"
     exit_price: float | None = None
-    pnl_quote: float | None = None
+    pnl_quote: float | None = None  # net of fees and slippage (records before v3: gross)
     resolved_ts: int | None = None
+    gross_pnl_quote: float | None = None
+    costs_quote: float | None = None
 
     @classmethod
     def from_setup(cls, setup: TradeSetup, *, target_index: int = -1) -> SignalRecord:
@@ -75,6 +83,8 @@ def resolve_record(
     *,
     resolved_ts: int,
     open_: float | None = None,
+    fee_bps: float = PAPER_TAKER_FEE_BPS,
+    slippage_bps: float = PAPER_SLIPPAGE_BPS,
 ) -> SignalRecord:
     """Resolve a pending record against a later bar's range.
 
@@ -82,8 +92,10 @@ def resolve_record(
     traded, else the record unchanged (still pending). Uses the same stop-first
     `classify_exit` as the backtest, so live and backtest classify identically.
     Pass the bar's `open_` so a gap through the stop (or target) resolves at
-    the open, not the better level it never traded at. `pnl_quote` is
-    frictionless (fees/slippage are the execution layer's read).
+    the open, not the better level it never traded at. `pnl_quote` is NET:
+    both fills pay `slippage_bps` and `fee_bps` on their notional, the same
+    cost model as the backtest replay, so live and backtest R compare like
+    for like; `gross_pnl_quote` keeps the frictionless figure beside it.
     """
     if record.outcome != "pending":
         return record
@@ -92,11 +104,17 @@ def resolve_record(
     )
     if exit_price is None:
         return record
+    size, fee, slip = record.size_base, fee_bps / 1e4, slippage_bps / 1e4
+    gross = size * (exit_price - record.entry)
+    fill_in, fill_out = record.entry * (1.0 + slip), exit_price * (1.0 - slip)
+    net = size * (fill_out - fill_in) - size * (fill_in + fill_out) * fee
     return record.model_copy(
         update={
             "outcome": verdict,
             "exit_price": exit_price,
-            "pnl_quote": record.size_base * (exit_price - record.entry),
+            "pnl_quote": net,
+            "gross_pnl_quote": gross,
+            "costs_quote": gross - net,
             "resolved_ts": resolved_ts,
         }
     )
@@ -142,6 +160,42 @@ class TrackRecordLog:
 
     def summary(self) -> dict:
         return summarize_records(self.read())
+
+    # ---- the in-flight setup per symbol (sidecar, rewritten atomically) ----
+
+    @property
+    def _pending_file(self) -> Path:
+        return self._dir / "signals-pending.json"
+
+    def _read_pending(self) -> dict[str, dict]:
+        try:
+            raw = json.loads(self._pending_file.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return {}  # absent or corrupt: start clean, never block the poll
+        return raw if isinstance(raw, dict) else {}
+
+    def load_pending(self, symbol: str) -> SignalRecord | None:
+        data = self._read_pending().get(symbol)
+        if data is None:
+            return None
+        try:
+            rec = SignalRecord.model_validate(data)
+        except ValueError:
+            return None
+        return rec if rec.outcome == "pending" else None
+
+    def save_pending(self, symbol: str, record: SignalRecord | None) -> None:
+        data = self._read_pending()
+        if record is None:
+            if symbol not in data:
+                return
+            data.pop(symbol)
+        else:
+            data[symbol] = record.model_dump()
+        self._dir.mkdir(parents=True, exist_ok=True)
+        tmp = self._pending_file.with_suffix(".tmp")
+        tmp.write_text(json.dumps(data, separators=(",", ":"), default=str), encoding="utf-8")
+        tmp.replace(self._pending_file)
 
 
 __all__ = [

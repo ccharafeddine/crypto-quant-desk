@@ -59,15 +59,46 @@ def test_from_setup_uses_furthest_target() -> None:
 
 def test_resolve_record_win_loss_pending() -> None:
     rec = _record()
-    win = resolve_record(rec, high=110.0, low=99.0, resolved_ts=2000)
+    free = {"fee_bps": 0.0, "slippage_bps": 0.0}
+    win = resolve_record(rec, high=110.0, low=99.0, resolved_ts=2000, **free)
     assert win.outcome == "win" and win.exit_price == 109.0
     assert win.pnl_quote == 9.0 and win.resolved_ts == 2000
 
-    loss = resolve_record(rec, high=101.0, low=96.0, resolved_ts=2000)
+    loss = resolve_record(rec, high=101.0, low=96.0, resolved_ts=2000, **free)
     assert loss.outcome == "loss" and loss.exit_price == 97.0 and loss.pnl_quote == -3.0
 
     still = resolve_record(rec, high=105.0, low=98.0, resolved_ts=2000)
     assert still.outcome == "pending" and still.pnl_quote is None
+
+
+def test_resolved_pnl_pays_fees_and_slippage_like_the_backtest() -> None:
+    win = resolve_record(_record(), high=110.0, low=99.0, resolved_ts=2000)  # paper defaults
+    fill_in, fill_out = 100.0 * 1.0005, 109.0 * 0.9995  # 5 bps slippage each way
+    net = (fill_out - fill_in) - (fill_in + fill_out) * 0.004  # 40 bps taker each side
+    assert win.gross_pnl_quote == 9.0
+    assert win.pnl_quote == pytest.approx(net)
+    assert win.costs_quote == pytest.approx(9.0 - net) and win.costs_quote > 0
+
+
+def test_pending_setup_survives_a_restart_per_symbol(tmp_path) -> None:
+    log = TrackRecordLog(tmp_path)
+    assert log.load_pending("BTC/USD") is None
+    log.save_pending("BTC/USD", _record())
+    log.save_pending("ETH/USD", _record(symbol="ETH/USD", entry=2000.0))
+    again = TrackRecordLog(tmp_path)  # a fresh process reads the sidecar
+    assert again.load_pending("BTC/USD") == _record()
+    assert again.load_pending("ETH/USD").entry == 2000.0
+    again.save_pending("BTC/USD", None)
+    assert again.load_pending("BTC/USD") is None and again.load_pending("ETH/USD") is not None
+    assert again.read() == []  # pending never lands in the append-only history
+
+
+def test_corrupt_pending_sidecar_is_ignored(tmp_path) -> None:
+    (tmp_path / "signals-pending.json").write_text("{not json", encoding="utf-8")
+    log = TrackRecordLog(tmp_path)
+    assert log.load_pending("BTC/USD") is None
+    log.save_pending("BTC/USD", _record())
+    assert log.load_pending("BTC/USD") == _record()
 
 
 def test_resolve_record_ignores_already_resolved() -> None:
