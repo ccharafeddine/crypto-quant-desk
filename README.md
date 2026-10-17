@@ -1,151 +1,145 @@
-# Crypto Quant Desk
+<p align="center">
+  <img src="site-kit/logo/logo-256.png" width="96" alt="Crypto Quant Desk logo">
+</p>
 
-A cross-platform (Windows & macOS) desktop dashboard and trading terminal for a
-Kraken spot account: an adjustable card workspace with live positions and true
-cost basis, portfolio-level risk (volatility, BTC beta, concentration, risk
-contribution, tail metrics), Bloomberg-style analytics, real-time charts and
-market microstructure, and a full order suite with hard safety rails. A signal
-engine turns a backtested strategy into sized, risk-bounded trade setups with an
-order-flow read on entry timing — advisory only, it can only pre-fill the ticket.
-A Claude-powered analyst panel narrates the numbers; the math engine computes them.
+<h1 align="center">Crypto Quant Desk</h1>
 
-Personal-use software, MIT-licensed. It talks to Kraken's official APIs and
-nothing else: no third-party price feeds, no telemetry, and your API keys never
-leave your machine (they live in your OS keychain — Windows Credential Manager or
-macOS Keychain — not on disk).
+<p align="center">
+  A Kraken spot trading terminal with desk-grade risk analytics, for Windows and macOS.
+</p>
 
-![Crypto Quant Desk — Monitor perspective](docs/screenshots/monitor.png)
+![Portfolio overview: time-weighted equity curve against BTC, risk at a glance and risk contribution](site-kit/screenshots/01-portfolio.png)
 
-## Status
+Kraken's dashboard shows balances and orders. Crypto Quant Desk adds what a risk
+desk would want on top: time-weighted performance with deposits removed,
+fee-inclusive cost basis, VaR that is backtested rather than assumed, crash
+replays of the book you hold today, liquidity, attribution against BTC and tax
+lots. It is also a full order terminal with hard safety rails.
 
-**v2.0.0**, plus the **v2.2 signals expansion** (complete) — the core desk is
-feature-complete: adjustable workspace, live trading with rails, streaming market
-data, the analytics suite, the AI analyst, and now a signal engine (sized trade
-setups, order-flow entry timing, and a walk-forward backtest with a live track
-record). Runs on Windows and macOS; a per-user Windows installer is built from
-[`packaging/windows/`](packaging/windows/) and a macOS `.app`/`.dmg` from
-[`packaging/`](packaging/). The canonical spec lives in
-[`docs/`](docs/) (PRD, app flow, tech stack, frontend guidelines, backend
-structure, implementation plan); session state is tracked in
-[`progress.txt`](progress.txt).
+Every number comes from a pure, tested engine fed only by Kraken's official
+APIs. The UI displays the numbers and the optional AI analyst narrates them;
+neither one computes a figure. There is no telemetry and no third-party data,
+and your keys stay in your OS keychain.
 
-## What it does
+## Pages
 
-- **Adjustable workspace** — every panel is a card you can float, tab, split, and
-  resize; three saved perspectives (Trading / Analysis / Monitor) and a reset,
-  with your layout persisted between sessions
-- **Positions** — live holdings, mark price, USD value, average cost,
-  break-even, unrealized PnL (cost basis labeled per quote currency)
-- **Risk** — annualized and EWMA volatility, BTC beta, HHI, effective bets,
-  per-asset risk contribution, VaR/CVaR, with every assumption footnoted
-- **Analytics** — ratios (Sharpe, Sortino, Calmar, rolling), exposure
-  (correlation heatmap, concentration, sector map), attribution (per-asset
-  realized PnL, monthly-returns heatmap, BTC benchmark), and scenario stress
-  (drawdown, BTC shocks, Monte Carlo NAV fan)
-- **Charts & microstructure** — candlestick chart with volume and selectable
-  timeframes, a cumulative-depth order book, a live Time & Sales tape, and a
-  watchlist; one active-symbol bus keeps them in sync
-- **Trading** — market/limit/stop/take-profit/trailing orders with a
-  confirmation dialog, a paper-mode default, a max-order-value cap, and an
-  append-only local audit log; open-orders management; live order state via
-  WebSocket
-- **Performance** — equity curve, realized/unrealized PnL history, drawdown,
-  per-position stats, trade expectancy
-- **Signals** — a trend strategy proposes a sized, risk-bounded trade setup
-  (entry, ATR stop, size, R:R, targets, trend-only confidence); an order-flow
-  overlay reads the book for entry timing (microprice, spread, imbalance,
-  estimated slippage, a GO/WAIT/CAUTION verdict); a walk-forward backtest and a
-  live track record show how it has done. "Send to ticket" only ever pre-fills —
-  there is no path from a signal to an order
-- **Alerts** — price/PnL/risk and setup-armed rules with native OS notifications
-  (Windows toasts, macOS Notification Center)
-- **Analyst** — rules-based narration for free; optional Claude analysis (your
-  own Anthropic key, `claude-opus-4-8`) with portfolio commentary, trade review,
-  and free-text Q&A, streamed and priced per call. It narrates engine output and
-  never invents numbers
+| Page | What's on it |
+|---|---|
+| **Portfolio** | TWR equity curve vs BTC buy-and-hold (flows stripped out), positions with fee-inclusive cost basis and break-even, performance and trade stats |
+| **Markets** | Watchlist with sparklines, candlestick chart with volume, live depth ladder, time and sales |
+| **Trading** | Every Kraken spot order type with attached TP/SL, open orders (cancel/edit), paper mode by default |
+| **Signals** | Sized trend setup, an order-book timing verdict (GO / WAIT / CAUTION), a costed backtest next to its frictionless twin, a net-of-fee live track record |
+| **Risk** | Risk card (vol, EWMA vol, beta, concentration, risk contribution), analytics suite and the **Risk lab** |
+| **Insight** | Rules-based narrative of the computed numbers; optional AI analyst with your own key |
 
-## Screenshots
+A KPI strip (NAV, unrealized P&L, realized, 1Y TWR, vol, BTC beta, one-day VaR
+with ES 97.5%, max drawdown) stays on screen on every page. You can float, tab,
+split and resize every panel, and the app saves each page's layout.
 
-The workspace ships three saved perspectives (all shown here on demo data).
+![Markets: watchlist, candlestick chart, depth ladder and time and sales](site-kit/screenshots/02-markets.png)
 
-**Trading** — watchlist, live chart, analytics, and the AI analyst:
+### Risk lab
 
-![Trading perspective](docs/screenshots/trading.png)
+![Risk lab: VaR four ways, ES 97.5% and the rolling VaR backtest](site-kit/screenshots/05-risk-lab-var.png)
 
-**Analysis** — full ratio panel, order ticket, and alerts:
+- **VaR set**: historical, filtered historical (EWMA λ 0.94), parametric and
+  Cornish-Fisher at 95% and 99%, plus ES 97.5%. Each method is backtested over a
+  rolling 250-day window with Kupiec and Christoffersen tests.
+- **Crash replays**: today's book through LUNA (2022), FTX (2022), the Aug 2024
+  carry unwind and the 10 Oct 2025 cascade, using real per-asset moves from
+  Kraken's trade history. Also a stablecoin depeg shock and a 30-day bootstrap
+  NAV fan.
+- **Liquidity**: days to exit at 10% of 30-day volume, downside beta and rolling
+  correlation.
+- **Attribution**: active return vs BTC split exactly into allocation, beta and
+  selection; deepest drawdowns; fee drag.
+- **Tax lots**: FIFO, HIFO and average cost side by side.
+- **Stability**: a walk-forward expectancy heatmap over the strategy's
+  parameter grid.
 
-![Analysis perspective](docs/screenshots/analysis.png)
+![Risk lab: crash replays and the 30-day NAV fan](site-kit/screenshots/06-risk-lab-crashes.png)
 
-**Signals** — a sized trade setup, the order-flow timing verdict, and the
-backtest-vs-live track record (advisory only; "Send to ticket" never submits):
+### Signals and trading
 
-![Signals panel](docs/screenshots/signals.png)
+![Signals: sized setup, timing verdict and the net-of-cost backtest](site-kit/screenshots/04-signals.png)
+
+The signal engine is advisory. **Send to ticket** fills in price and size and
+does nothing else, and no code path leads from a signal to an order.
+Backtests fill at the next open plus slippage, include fees, handle gaps
+through stops, and pick parameters with an anchored walk-forward.
+
+![Trading: chart, order ticket and open orders, paper mode](site-kit/screenshots/03-trading.png)
 
 ## Safety model
 
-- Paper mode is the default; going live requires an explicit, typed confirmation
-- Every order passes validation, a size cap, and a confirmation dialog
-- Every order attempt is audit-logged locally
-- Kraken API keys need only query + trade permissions. **Never enable
-  Withdraw Funds** — the app has no withdrawal code path and never will
+- **Paper mode is the default.** Going live requires typing `LIVE`.
+- **Every order** passes validation, a confirmation dialog with estimated cost
+  and fee, and a max-order-value cap (default $500, both modes, fails closed
+  without a price).
+- **The cap and mode are re-checked at send time.** A change after the confirm
+  dialog refuses the order; it never resizes it.
+- **Every order attempt** is appended to a local JSONL audit log, kept outside
+  the repo, with no key material.
+- **Keys** live in Windows Credential Manager or the macOS Keychain. They need
+  only query and trade permissions. **Never enable Withdraw Funds.** The app has
+  no withdrawal code path.
+
+These rails are pinned by tests.
 
 ## Install
 
-- **Windows** — download `crypto-quant-desk-2.0.0-setup.exe` or build it from
-  source. Per-user install (no admin), Start-menu shortcut, clean uninstall that
-  preserves your data and keys.
-- **macOS** — download the `.dmg` or build the `.app` from source, then drag it to
-  Applications. It is unsigned, so approve it once on first launch (right-click →
-  Open).
+- **Windows**: per-user installer built from [`packaging/windows/`](packaging/windows/)
+  (no admin, Start-menu shortcut, uninstall keeps your data and keys).
+- **macOS**: `.app` / `.dmg` built from [`packaging/`](packaging/). It is
+  unsigned, so on first launch right-click it and choose Open.
 
-Build steps for both are in [`packaging/README.md`](packaging/README.md).
+First launch opens in **demo mode**: a sample book with live Kraken market data.
+To connect your account, go to **File > Settings** and enter a Kraken API key
+from https://www.kraken.com/u/security/api with Query Funds, Query
+Open/Closed Orders & Trades, Query Ledger Entries and Create & Modify Orders
+(**never** Withdraw).
 
-First launch opens in demo mode (synthetic portfolio, real market data). Connect
-your own account via **File > Settings** with a Kraken API key created at
-https://www.kraken.com/u/security/api (permissions: Query Funds, Query Open/
-Closed Orders & Trades, Query Ledger Entries, Create & Modify Orders — **never**
-Withdraw). Optionally add an Anthropic key there to enable the AI analyst.
+## Development
 
-## Quick start (dev)
-
-Requires Python 3.11+. On macOS/Linux use `python3` and `source .venv/bin/activate`.
+Requires Python 3.11+ (CI tests 3.12 and 3.13). Dependencies are locked in `uv.lock`; `requirements-lock.txt`
+is the same lock for pip.
 
 ```bash
 git clone https://github.com/ccharafeddine/crypto-quant-desk.git
 cd crypto-quant-desk
 
-python -m venv .venv
-.venv\Scripts\activate          # Windows;  source .venv/bin/activate on macOS
-pip install -e ".[dev]"
+uv sync --extra dev            # or: python -m venv .venv && pip install -r requirements-lock.txt -e .
+uv run python -m cqd
 
-python -m cqd
+uv run pytest -q               # 548 tests
+uv run ruff check src tests
+uv run ruff format src tests
 ```
+
+CI runs lint, format and tests on Windows and macOS for Python 3.12 and 3.13
+against the lock.
 
 ## Architecture
 
 ```
 src/cqd/
-├── engine/     # pure math: risk, metrics, cost basis, performance, signals,
-│               #   indicators, order-flow microstructure, backtest (no I/O)
-├── data/       # Kraken REST + WebSocket clients, normalizer, credentials, track record
-├── trading/    # order service, paper broker, limits, audit log
-├── alerts/     # rule engine + native OS notifications (Windows/macOS)
-├── analyst/    # rules narration + optional Claude integration (grounded, priced)
-└── ui/         # PySide6 QtAds card workspace, dockable panels, token-driven themes
+├── engine/     pure math: risk, metrics, var, stress, attribution, tax_lots,
+│               cost_basis, performance, backtest, signals, microstructure, scenario
+├── data/       Kraken REST + WebSocket clients, demo client, normalisation,
+│               returns, crash history, track record
+├── trading/    order service (prepare → confirm → send), paper broker, limits, audit
+├── alerts/     rule engine + native notifications
+├── analyst/    rules narration + optional LLM, grounded in engine output
+└── ui/         PySide6 shell, nav rail, KPI strip, QtAds dock panels, Graphite theme
 ```
 
-Design rules: the engine is pure functions (fully tested, no I/O/Qt/network);
-all market and portfolio data comes from Kraken's official APIs; every
-order flows through one service with non-bypassable rails; no database —
-settings, JSON state, and the OS credential vault.
+The engine is pure functions with no I/O, Qt or network code, tested against
+hand-computed vectors. The statistics drop Kraken's still-forming candle. There
+is no database: the app uses settings files, JSON state and the OS credential
+vault. The full spec is in [`docs/`](docs/).
 
-## Development
-
-```powershell
-pytest -q                 # tests
-ruff check src tests      # lint
-ruff format src tests     # format
-```
+Screenshots and the site kit are generated by
+`scripts/capture_screenshots.py` and `scripts/build_site_kit.py`.
 
 ## License
 
@@ -153,6 +147,7 @@ MIT. See `LICENSE`.
 
 ## Disclaimer
 
-Experimental software that can place real orders on your live Kraken account
-when you enable live mode with trade-permissioned keys. Use at your own risk.
-The authors accept no liability for financial losses.
+This is experimental software. It can place real orders on your live Kraken
+account if you turn on live mode with trade-permissioned keys. Use it at your
+own risk. The authors accept no liability for financial losses. Tax-lot figures
+are arithmetic, not tax advice.
