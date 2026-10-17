@@ -1,0 +1,56 @@
+[
+  {
+    "file": "screenshots/01-portfolio.png",
+    "webp": "screenshots/01-portfolio.webp",
+    "width": 1600,
+    "height": 1000,
+    "title": "Portfolio overview",
+    "caption": "Time-weighted equity curve against BTC buy-and-hold with deposits and withdrawals stripped out, risk at a glance and each holding's share of portfolio vol.",
+    "alt": "Crypto Quant Desk, portfolio overview page (demo data)"
+  },
+  {
+    "file": "screenshots/02-markets.png",
+    "webp": "screenshots/02-markets.webp",
+    "width": 1600,
+    "height": 1000,
+    "title": "Markets",
+    "caption": "Watchlist with sparklines, candlestick chart with volume, live depth ladder and time and sales, all from Kraken public data.",
+    "alt": "Crypto Quant Desk, markets page (demo data)"
+  },
+  {
+    "file": "screenshots/03-trading.png",
+    "webp": "screenshots/03-trading.webp",
+    "width": 1600,
+    "height": 1000,
+    "title": "Trading",
+    "caption": "Order ticket for every Kraken spot order type. Paper by default, a confirm dialog on every order, a max-order cap re-checked at send, and an audit log.",
+    "alt": "Crypto Quant Desk, trading page (demo data)"
+  },
+  {
+    "file": "screenshots/04-signals.png",
+    "webp": "screenshots/04-signals.webp",
+    "width": 1600,
+    "height": 1000,
+    "title": "Signals and backtest",
+    "caption": "A sized trend setup with an order-book timing read, a backtest net of fees and slippage next to its frictionless twin, and the live track record.",
+    "alt": "Crypto Quant Desk, signals and backtest page (demo data)"
+  },
+  {
+    "file": "screenshots/05-risk-lab-var.png",
+    "webp": "screenshots/05-risk-lab-var.webp",
+    "width": 1600,
+    "height": 1000,
+    "title": "Risk lab: VaR and backtests",
+    "caption": "One-day VaR four ways and ES 97.5%, each backtested over a rolling 250-day window with Kupiec and Christoffersen tests.",
+    "alt": "Crypto Quant Desk, risk lab: var and backtests page (demo data)"
+  },
+  {
+    "file": "screenshots/06-risk-lab-crashes.png",
+    "webp": "screenshots/06-risk-lab-crashes.webp",
+    "width": 1600,
+    "height": 1000,
+    "title": "Risk lab: crash replays",
+    "caption": "Today's book run through LUNA, FTX, the Aug 2024 carry unwind and the 10 Oct 2025 cascade using real Kraken trades, plus a 30-day bootstrap NAV fan.",
+    "alt": "Crypto Quant Desk, risk lab: crash replays page (demo data)"
+  }
+]
