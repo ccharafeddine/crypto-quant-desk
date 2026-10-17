@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from cqd.data.track_record import (
     MIN_LIVE_SAMPLES,
     SignalRecord,
@@ -123,3 +125,9 @@ def test_track_log_append_only_across_instances(tmp_path) -> None:
 def test_track_log_empty_when_absent(tmp_path) -> None:
     assert TrackRecordLog(tmp_path).read() == []
     assert TrackRecordLog(tmp_path).summary()["trades"] == 0
+
+
+def test_resolve_record_gap_through_stop_fills_at_open() -> None:
+    rec = _record()
+    gapped = resolve_record(rec, high=94.0, low=90.0, resolved_ts=2000, open_=93.0)
+    assert gapped.outcome == "loss" and gapped.exit_price == pytest.approx(93.0)

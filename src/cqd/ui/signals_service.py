@@ -30,7 +30,7 @@ from cqd.data.client import make_client
 from cqd.data.errors import KrakenError
 from cqd.data.symbols import Symbol
 from cqd.data.track_record import SignalRecord, TrackRecordLog, resolve_record
-from cqd.engine.backtest import PropLimits, walk_forward
+from cqd.engine.backtest import PropLimits, replay, walk_forward
 from cqd.engine.microstructure import (
     BookFeatures,
     FillEstimate,
@@ -50,7 +50,7 @@ DEPTH_COUNT = 25
 #: How many recent imbalance readings the flow buffer keeps for `flow_delta`.
 FLOW_WINDOW = 5
 #: Cap the backtest window so the per-symbol replay stays snappy on the GUI loop.
-BACKTEST_BARS = 400
+BACKTEST_BARS = 720  # Kraken serves at most 720 bars per OHLC call
 
 
 def build_strategy_params() -> StrategyParams:
@@ -298,17 +298,24 @@ class SignalsService(QObject):
     # ---------- track record + backtest ----------
 
     def _resolve_pending(self, candles: list) -> None:
-        """Resolve the pending setup against the latest bar, but only a bar AFTER
-        the entry bar (strictly later timestamp - no same-bar look-ahead)."""
+        """Resolve the pending setup against every closed bar AFTER the entry bar
+        (strictly later timestamp - no same-bar look-ahead), oldest first.
+
+        Walking all later bars (not just the newest) means a stop or target
+        that traded between polls is not missed; the bar's open is passed so a
+        gap through a level resolves at the open."""
         if self._track_log is None or self._pending is None or not candles:
             return
-        last = candles[-1]
-        if int(last.time) <= self._pending.created_ts:
-            return
-        resolved = resolve_record(self._pending, last.high, last.low, resolved_ts=int(last.time))
-        if resolved.outcome != "pending":
-            self._track_log.append(resolved)
-            self._pending = None
+        for bar in candles:
+            if int(bar.time) <= self._pending.created_ts:
+                continue
+            resolved = resolve_record(
+                self._pending, bar.high, bar.low, resolved_ts=int(bar.time), open_=bar.open
+            )
+            if resolved.outcome != "pending":
+                self._track_log.append(resolved)
+                self._pending = None
+                return
 
     def _emit_stats(self, candles: list, symbol: Symbol, equity: float) -> None:
         if symbol != self._backtest_symbol:  # backtest is per-symbol; cache it
@@ -321,8 +328,21 @@ class SignalsService(QObject):
         if equity <= 0 or len(candles) < 2:
             return None
         window = candles[-self._backtest_bars :]
+        params = self._params_provider()
+        limits = PropLimits(starting_equity=equity)
         try:
-            return walk_forward(window, self._params_provider(), PropLimits(starting_equity=equity))
+            # The costed replay of the configured strategy, then the honest read:
+            # an anchored walk-forward whose out-of-sample numbers ride along.
+            stats = replay(window, params, limits)
+            wf = walk_forward(window, params, limits)
+            return stats.model_copy(
+                update={
+                    "oos_trades": wf.oos_trades,
+                    "oos_expectancy_r": wf.oos_expectancy_r,
+                    "oos_return": wf.oos_return,
+                    "oos_folds": len(wf.folds),
+                }
+            )
         except Exception:  # noqa: BLE001 - a backtest error must not kill the poll
             _log.exception("signals backtest failed")
             return None

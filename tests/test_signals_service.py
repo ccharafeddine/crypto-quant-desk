@@ -272,4 +272,39 @@ def test_service_records_resolved_setup(tmp_path) -> None:
     asyncio.run(svc.refresh_once(BTC))
     records = log.read()
     assert len(records) == 1 and records[0].outcome == "loss"
+    # The bar opened at 12, below the 13 stop: a gap fills at the open (v2.2: 13).
+    assert records[0].exit_price == pytest.approx(12.0)
     assert svc._pending is None
+
+
+def test_service_resolves_against_a_bar_between_polls(tmp_path) -> None:
+    # Regression: v2.2 only looked at the newest bar, so a stop that traded on a
+    # bar between two polls (and recovered by the next one) was never recorded.
+    from cqd.data.track_record import TrackRecordLog
+
+    log = TrackRecordLog(tmp_path)
+    svc = _service(_FakeClient(_candles(UPTREND), _book()), track_log=log)
+    svc._symbol = BTC
+    asyncio.run(svc.refresh_once(BTC))
+    assert svc._pending is not None
+    later = _candles(UPTREND) + [
+        Candle(time=1000 + 7 * 60, open=15.0, high=15.5, low=12.5, close=15.0, volume=1.0),
+        Candle(time=1000 + 8 * 60, open=15.0, high=16.5, low=14.5, close=16.0, volume=1.0),
+    ]
+    svc._client_factory = lambda: _FakeClient(later, _book())
+    asyncio.run(svc.refresh_once(BTC))
+    records = log.read()
+    assert len(records) == 1 and records[0].outcome == "loss"
+    assert records[0].resolved_ts == 1000 + 7 * 60
+
+
+def test_service_backtest_carries_costs_and_out_of_sample() -> None:
+    import math
+
+    closes = [100 * math.exp(0.02 * math.sin(i / 7) + 0.0005 * i) for i in range(400)]
+    svc = _service(_FakeClient(_candles(closes), _book()))
+    stats = svc._run_backtest(_candles(closes), 10_000.0)
+    assert stats is not None
+    assert stats.fee_bps == 40.0 and stats.slippage_bps == 5.0
+    assert stats.oos_folds is not None and stats.oos_folds >= 1
+    assert ss.BACKTEST_BARS == 720

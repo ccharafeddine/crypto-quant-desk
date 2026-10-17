@@ -148,7 +148,7 @@ def test_realized_risk_within_budget(equity: float) -> None:
 # --- breakout variant ---
 
 
-def test_breakout_variant_uses_donchian_level_as_entry() -> None:
+def test_breakout_entry_ref_is_the_confirming_close_not_the_band() -> None:
     params = StrategyParams(
         fast=2, slow=3, trend=5, atr_len=2, atr_mult=2.0, risk_pct=0.01, variant="breakout"
     )
@@ -158,7 +158,9 @@ def test_breakout_variant_uses_donchian_level_as_entry() -> None:
     assert trend_state(candles, params) == TrendState.LONG_ACTIVE
     setup = evaluate_setup(candles, params, equity_quote=100_000.0, pair_spec=SPEC)
     assert setup is not None
-    assert setup.entry_ref == pytest.approx(10.5)  # prior Donchian upper, not 20
+    # Regression: this used to quote the prior Donchian upper (10.5), a price
+    # the strategy could not get once the close (20) had confirmed the break.
+    assert setup.entry_ref == pytest.approx(20.0)
 
 
 # --- determinism ---

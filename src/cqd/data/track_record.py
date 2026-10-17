@@ -69,19 +69,26 @@ class SignalRecord(BaseModel):
 
 
 def resolve_record(
-    record: SignalRecord, high: float, low: float, *, resolved_ts: int
+    record: SignalRecord,
+    high: float,
+    low: float,
+    *,
+    resolved_ts: int,
+    open_: float | None = None,
 ) -> SignalRecord:
     """Resolve a pending record against a later bar's range.
 
     Returns a new resolved record (outcome/exit/pnl set) if the stop or target
     traded, else the record unchanged (still pending). Uses the same stop-first
     `classify_exit` as the backtest, so live and backtest classify identically.
-    `pnl_quote` is frictionless (fees/slippage are the execution layer's read).
+    Pass the bar's `open_` so a gap through the stop (or target) resolves at
+    the open, not the better level it never traded at. `pnl_quote` is
+    frictionless (fees/slippage are the execution layer's read).
     """
     if record.outcome != "pending":
         return record
     verdict, exit_price = classify_exit(
-        record.direction, record.entry, record.stop, record.target, high, low
+        record.direction, record.entry, record.stop, record.target, high, low, open_=open_
     )
     if exit_price is None:
         return record

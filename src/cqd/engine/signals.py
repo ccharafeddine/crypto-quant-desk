@@ -84,8 +84,8 @@ class StrategyParams(BaseModel):
 class TradeSetup(BaseModel):
     """A concrete, sized long setup for one pair at one bar.
 
-    `entry_ref` is the reference entry price (last close for `ma_cross`, the
-    breakout level for `breakout`); `stop = entry_ref - atr_mult*ATR`.
+    `entry_ref` is the reference entry price (the last closed bar's close, for
+    both variants); `stop = entry_ref - atr_mult*ATR`.
     `size_base`/`size_quote` are the sized position; `risk_quote` is the REALIZED
     per-trade risk (<= `risk_pct*equity` by construction). `targets` are the
     1R/2R/3R take-profits and `rr` is the R-multiple of the furthest target.
@@ -179,6 +179,38 @@ def trend_state(candles: list[Candle], params: StrategyParams) -> TrendState:
     return TrendState.LONG_ACTIVE if fast_ma > slow_ma else TrendState.LONG_ARMED
 
 
+def trend_states(candles: list[Candle], params: StrategyParams) -> list[TrendState]:
+    """`trend_state` for EVERY bar in one vectorized pass.
+
+    Element i equals `trend_state(candles[: i + 1], params)` exactly (rolling
+    windows and the shifted Donchian only look backwards), so a backtest can
+    detect fresh triggers without re-running the engine on every prefix.
+    """
+    n = len(candles)
+    if n == 0:
+        return []
+    closes = _closes(candles)
+    trend_ma = sma(closes, params.trend)
+    above = (closes > trend_ma) & trend_ma.notna() & closes.notna()
+    if params.variant == "breakout":
+        upper = donchian(candles, params.fast).upper
+        active = above & upper.notna() & (closes > upper)
+        armed = above & ~active
+    else:
+        fast_ma = sma(closes, params.fast)
+        slow_ma = sma(closes, params.slow)
+        valid = fast_ma.notna() & slow_ma.notna()
+        active = above & valid & (fast_ma > slow_ma)
+        armed = above & valid & ~active
+    out: list[TrendState] = []
+    for i in range(n):
+        if i + 1 < params.trend or not (active.iloc[i] or armed.iloc[i]):
+            out.append(TrendState.FLAT)
+        else:
+            out.append(TrendState.LONG_ACTIVE if active.iloc[i] else TrendState.LONG_ARMED)
+    return out
+
+
 def _confidence(closes: pd.Series, trend_ma_now: float, params: StrategyParams) -> float:
     """Trend-strength confidence in [0,1]: distance above the trend MA blended
     with the trend MA's slope. No order-book input, by design."""
@@ -210,7 +242,8 @@ def evaluate_setup(
     size floors below the pair minimum (FAIL CLOSED - the engine never rounds a
     sub-minimum size UP past the risk budget). Otherwise:
 
-      entry_ref  = last close (`ma_cross`) or prior Donchian upper (`breakout`)
+      entry_ref  = last closed close (both variants; the backtest fills at the
+                   NEXT bar's open)
       stop       = entry_ref - atr_mult * ATR          (rounded to price prec.)
       size_base  = floor( min(risk_size, leverage_cap_size), lot_prec )
       risk_quote = size_base * (entry_ref - stop)      (<= risk_pct * equity)
@@ -231,12 +264,11 @@ def evaluate_setup(
     if not (math.isfinite(atr_val) and math.isfinite(price)) or atr_val <= 0:
         return None
 
-    if params.variant == "breakout":
-        entry_ref = float(donchian(candles, params.fast).upper.iloc[-1])
-        if not math.isfinite(entry_ref) or entry_ref <= 0:
-            return None
-    else:
-        entry_ref = price
+    # Both variants reference the last CLOSED price. The breakout used to quote
+    # the channel level it broke, but the signal is only known at the close,
+    # so no order placed after it can fill at the (lower) band: quoting the
+    # band booked a fill the strategy could never get (look-ahead fill bias).
+    entry_ref = price
 
     pd_dec, lot_dec = pair_spec.price_decimals, pair_spec.lot_decimals
     entry_ref = _round_to(entry_ref, pd_dec)
@@ -302,4 +334,5 @@ __all__ = [
     "TrendState",
     "evaluate_setup",
     "trend_state",
+    "trend_states",
 ]
