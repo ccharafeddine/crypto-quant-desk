@@ -2,27 +2,46 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, "phase*"]
   pull_request:
   workflow_dispatch:
 
 jobs:
   test:
-    # windows-latest matches the app's primary target platform.
-    runs-on: windows-latest
+    # Windows is the primary target; macOS is the second desktop the app runs on.
+    # Dependencies come from uv.lock, so every runner tests the same versions.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+        python: ["3.12", "3.13"]
+    runs-on: ${{ matrix.os }}
+    env:
+      QT_QPA_PLATFORM: offscreen
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: astral-sh/setup-uv@v6
         with:
-          python-version: "3.12"
-          cache: pip
-      - name: Install
-        run: pip install -e ".[dev]"
+          enable-cache: true
+      - name: Install (locked)
+        run: uv sync --locked --extra dev --python ${{ matrix.python }}
       - name: Lint
-        run: ruff check src tests
+        run: uv run --no-sync ruff check src tests
       - name: Format check
-        run: ruff format --check src tests
+        run: uv run --no-sync ruff format --check src tests
       - name: Tests
-        run: pytest -q
-        env:
-          QT_QPA_PLATFORM: offscreen
+        run: uv run --no-sync pytest -q
+
+  lock:
+    # The pip-readable lock must match uv.lock, or someone installing with pip
+    # gets different versions than CI tested.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: uv.lock matches pyproject
+        run: uv lock --check
+      - name: requirements-lock.txt matches uv.lock
+        run: |
+          uv export --frozen --extra dev --no-emit-project --no-header --no-hashes -o /tmp/req.txt
+          diff -u requirements-lock.txt /tmp/req.txt
