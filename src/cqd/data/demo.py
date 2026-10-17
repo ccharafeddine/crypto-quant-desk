@@ -41,6 +41,14 @@ _TRADE_SPEC: dict[str, list[tuple[float, float, int]]] = {
 }
 
 
+#: (refid, unix ts, USD amount, ledger type): +5,000 on 3 Nov 2025, -5,000 on
+#: 15 Jun 2026 - inside Kraken's 720-day window so the equity chart shows both.
+_DEMO_FLOWS: tuple[tuple[str, float, float, str], ...] = (
+    ("DEMO-DEPOSIT-2", 1762128000.0, 5_000.0, "deposit"),
+    ("DEMO-WITHDRAWAL-1", 1781481600.0, -5_000.0, "withdrawal"),
+)
+
+
 def _build_trades() -> list[dict[str, Any]]:
     trades: list[dict[str, Any]] = []
     for symbol, legs in _TRADE_SPEC.items():
@@ -138,6 +146,21 @@ class DemoClient:
                 "balance": SAMPLE_BOOK["USDC"],
             }
         )
+        # A later deposit and an equal withdrawal: the final book is unchanged,
+        # and the time-weighted return shows neither as performance.
+        for refid, ts, amount, kind in _DEMO_FLOWS:
+            entries.append(
+                {
+                    "refid": refid,
+                    "time": ts,
+                    "type": kind,
+                    "subtype": "",
+                    "asset": "USD",
+                    "amount": amount,
+                    "fee": 0.0,
+                    "balance": 0.0,  # recomputed below
+                }
+            )
         usd = cash
         held: dict[str, float] = {}
         events: list[tuple[float, str, float, float]] = []  # ts, asset, qty, cost
@@ -172,7 +195,13 @@ class DemoClient:
                     "balance": usd,
                 }
             )
-        return entries
+        # Running USD balance across trades and flows, in time order.
+        running = 0.0
+        for entry in sorted(entries, key=lambda e: e["time"]):
+            if entry["asset"] == "USD":
+                running += entry["amount"]
+                entry["balance"] = running
+        return sorted(entries, key=lambda e: e["time"])
 
     # ---------- market data: delegate to the real CLI, unchanged ----------
 
